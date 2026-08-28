@@ -94,9 +94,10 @@ function ProductionPage() {
         .insert({
           user_id: user!.id,
           name,
-          output_product_id: outputId,
-          output_product_name: out?.name ?? "",
-          output_quantity: Number(outputQty) || 1,
+          product_id: outputId,
+          product_name: out?.name ?? "",
+          yield_quantity: Number(outputQty) || 1,
+          yield_unit: out?.unit ?? "un",
         })
         .select("id")
         .single();
@@ -256,7 +257,7 @@ function ProductionPage() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{r.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      produz {qty(Number(r.output_quantity))} · {r.output_product_name}
+                      produz {qty(Number(r.yield_quantity))} {r.yield_unit} · {r.product_name}
                     </p>
                   </div>
                   <Button size="sm" onClick={() => setRunId(r.id)}>
@@ -287,7 +288,7 @@ function ProductionPage() {
                   <p className="text-xs text-muted-foreground">{shortDate(o.created_at)}</p>
                 </div>
                 <div className="text-right">
-                  <Badge variant="secondary">{qty(Number(o.output_quantity))}</Badge>
+                  <Badge variant="secondary">{qty(Number(o.produced_quantity))}</Badge>
                   <p className="text-xs text-muted-foreground">{money(Number(o.total_cost))}</p>
                 </div>
               </div>
