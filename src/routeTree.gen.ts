@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as EstoqueRouteImport } from './routes/estoque'
 import { Route as PdvRouteImport } from './routes/pdv'
 import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as VendasRouteImport } from './routes/vendas'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstoqueRoute = EstoqueRouteImport.update({
+  id: '/estoque',
+  path: '/estoque',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PdvRoute = PdvRouteImport.update({
@@ -44,6 +50,7 @@ const VendasRoute = VendasRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
   '/produtos': typeof ProdutosRoute
   '/vendas': typeof VendasRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
   '/produtos': typeof ProdutosRoute
   '/vendas': typeof VendasRoute
@@ -59,21 +67,23 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
   '/produtos': typeof ProdutosRoute
   '/vendas': typeof VendasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/pdv' | '/produtos' | '/vendas'
+  fullPaths: '/' | '/auth' | '/estoque' | '/pdv' | '/produtos' | '/vendas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/pdv' | '/produtos' | '/vendas'
-  id: '__root__' | '/' | '/auth' | '/pdv' | '/produtos' | '/vendas'
+  to: '/' | '/auth' | '/estoque' | '/pdv' | '/produtos' | '/vendas'
+  id: '__root__' | '/' | '/auth' | '/estoque' | '/pdv' | '/produtos' | '/vendas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  EstoqueRoute: typeof EstoqueRoute
   PdvRoute: typeof PdvRoute
   ProdutosRoute: typeof ProdutosRoute
   VendasRoute: typeof VendasRoute
@@ -93,6 +103,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estoque': {
+      id: '/estoque'
+      path: '/estoque'
+      fullPath: '/estoque'
+      preLoaderRoute: typeof EstoqueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pdv': {
@@ -122,6 +139,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  EstoqueRoute: EstoqueRoute,
   PdvRoute: PdvRoute,
   ProdutosRoute: ProdutosRoute,
   VendasRoute: VendasRoute,
