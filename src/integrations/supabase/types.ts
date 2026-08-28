@@ -212,6 +212,66 @@ export type Database = {
         }
         Relationships: []
       }
+      debt_reminders: {
+        Row: {
+          channel: string
+          created_at: string
+          customer_id: string | null
+          customer_name: string
+          debt_id: string | null
+          error: string
+          id: string
+          message: string
+          phone: string
+          provider_message_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string
+          debt_id?: string | null
+          error?: string
+          id?: string
+          message?: string
+          phone?: string
+          provider_message_id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string
+          debt_id?: string | null
+          error?: string
+          id?: string
+          message?: string
+          phone?: string
+          provider_message_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_reminders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_reminders_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "customer_debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_movements: {
         Row: {
           created_at: string
@@ -652,6 +712,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -677,6 +758,13 @@ export type Database = {
         }
         Returns: string
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       pay_debt: {
         Args: {
           p_amount: number
@@ -692,7 +780,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "dono" | "funcionario"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -819,6 +907,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["dono", "funcionario"],
+    },
   },
 } as const
