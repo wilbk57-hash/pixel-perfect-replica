@@ -72,7 +72,7 @@ function PosPage() {
     mutationFn: async () => {
       const { error } = await supabase.rpc("create_sale", {
         p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
-        p_customer_id: customerId === "none" ? undefined : customerId,
+        ...(customerId === "none" ? {} : { p_customer_id: customerId }),
         p_discount: Number(discount) || 0,
         p_paid: paidValue,
         p_payment_method: method,
