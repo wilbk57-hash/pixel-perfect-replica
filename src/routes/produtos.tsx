@@ -144,9 +144,10 @@ function ProductsPage() {
   const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
 
   return (
-    <AppShell
+        <AppShell
       title="Produtos"
       subtitle="Catálogo, preços e matérias-primas"
+      adminOnly
       actions={
         <div className="flex gap-2">
           <Dialog open={catOpen} onOpenChange={setCatOpen}>
