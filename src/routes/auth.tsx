@@ -29,6 +29,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [role, setRole] = useState<"dono" | "funcionario">("dono");
+
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/" });
