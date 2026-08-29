@@ -50,11 +50,11 @@ function InventoryPage() {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
-  const products = useQuery({
+    const products = useQuery({
     queryKey: ["products", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("products_secure").select("*").order("name");
+      const { data, error } = await supabase.from("products").select("*").order("name");
       if (error) throw error;
       return data;
     },
