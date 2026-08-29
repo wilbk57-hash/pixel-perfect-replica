@@ -65,11 +65,13 @@ function PosPage() {
 
   const subtotal = useMemo(() => cart.reduce((a, i) => a + i.price * i.quantity, 0), [cart]);
   const total = Math.max(subtotal - (Number(discount) || 0), 0);
-  const paidValue = paid === "" ? total : Number(paid) || 0;
+  const paidValue = paid === "" ? (method === "CREDIT" ? 0 : total) : Number(paid) || 0;
   const debt = Math.max(total - paidValue, 0);
-
   const checkout = useMutation({
     mutationFn: async () => {
+      if (method === "CREDIT" && customerId === "none") {
+        throw new Error("Selecione um cliente para registar a venda a crédito.");
+      }
       const { error } = await supabase.rpc("create_sale", {
         p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
         ...(customerId === "none" ? {} : { p_customer_id: customerId }),
