@@ -133,6 +133,17 @@ function DebtsPage() {
                     <p className="font-bold">{money(Number(d.remaining_amount))}</p>
                     <p className="text-xs text-muted-foreground">de {money(Number(d.original_amount))}</p>
                   </div>
+                                   {d.status !== "PAID" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={remind.isPending && remindingId === d.id}
+                      onClick={() => remind.mutate(d.id)}
+                    >
+                      <MessageCircle className="mr-1 size-3.5" />
+                      {remind.isPending && remindingId === d.id ? "A enviar…" : "Lembrar"}
+                    </Button>
+                  )}
                   {d.status !== "PAID" && (
                     <Button
                       size="sm"
