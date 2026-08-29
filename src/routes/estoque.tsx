@@ -42,7 +42,7 @@ const MOVE_TYPES = [
 ];
 
 function InventoryPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
@@ -54,7 +54,7 @@ function InventoryPage() {
     queryKey: ["products", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
+      const { data, error } = await (supabase as any).from("products_secure").select("*").order("name");
       if (error) throw error;
       return data;
     },
@@ -96,13 +96,17 @@ function InventoryPage() {
   });
 
   const list = products.data ?? [];
-  const totalValue = list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price), 0);
+  const totalValue = list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price ?? 0), 0);
   const low = list.filter((p) => Number(p.current_stock) <= Number(p.min_stock));
 
   return (
     <AppShell
       title="Estoque"
-      subtitle={`${list.length} produto(s) · ${money(totalValue)} em custo`}
+      subtitle={
+        isAdmin
+          ? `${list.length} produto(s) · ${money(totalValue)} em custo`
+          : `${list.length} produto(s)`
+      }
       actions={<Button onClick={() => setOpen(true)}>Registar movimento</Button>}
     >
       <div className="grid gap-4 lg:grid-cols-3">
@@ -116,7 +120,9 @@ function InventoryPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    mínimo {qty(Number(p.min_stock))} {p.unit} · custo {money(Number(p.cost_price))}
+                    {isAdmin
+                      ? `mínimo ${qty(Number(p.min_stock))} ${p.unit} · custo ${money(Number(p.cost_price ?? 0))}`
+                      : `mínimo ${qty(Number(p.min_stock))} ${p.unit}`}
                   </p>
                 </div>
                 <Badge variant={Number(p.current_stock) <= Number(p.min_stock) ? "destructive" : "secondary"}>
