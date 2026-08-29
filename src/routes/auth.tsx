@@ -136,6 +136,31 @@ function AuthPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Tipo de conta</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { value: "dono", label: "Dono", hint: "Acesso total" },
+                        { value: "funcionario", label: "Funcionário", hint: "Vendas e clientes" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setRole(opt.value)}
+                        className={
+                          "rounded-lg border p-3 text-left text-sm transition-colors " +
+                          (role === opt.value ? "border-primary bg-accent" : "hover:bg-muted")
+                        }
+                      >
+                        <span className="block font-medium">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="email2">Email</Label>
                   <Input id="email2" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
