@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -10,13 +11,27 @@ import {
   FlaskConical,
   ReceiptText,
   Sparkles,
+  UserPlus,
+  Trash2,
   LogOut,
   Menu,
   Leaf,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -30,6 +45,96 @@ const NAV = [
   { to: "/dividas", label: "Dívidas", icon: HandCoins, adminOnly: false },
   { to: "/assistente", label: "Assistente IA", icon: Sparkles, adminOnly: true },
 ] as const;
+
+function TeamDialog() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+
+  const employees = useQuery({
+    queryKey: ["employees"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("list_employees");
+      if (error) throw error;
+      return data as { user_id: string; email: string; created_at: string }[];
+    },
+  });
+
+  const invite = useMutation({
+    mutationFn: async (p_email: string) => {
+      const { error } = await (supabase as any).rpc("invite_employee", { p_email });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Funcionário adicionado");
+      setEmail("");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (p_user_id: string) => {
+      const { error } = await (supabase as any).rpc("remove_employee", { p_user_id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Funcionário removido");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="w-full justify-start gap-2">
+          <UserPlus className="size-4" />
+          Equipa
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Equipa</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label>Email da conta do funcionário</Label>
+          <p className="text-xs text-muted-foreground">
+            A pessoa precisa de criar a conta dela primeiro na tela "Criar conta".
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              placeholder="funcionario@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Button onClick={() => invite.mutate(email)} disabled={!email.trim() || invite.isPending}>
+              Adicionar
+            </Button>
+          </div>
+        </div>
+        <div className="mt-2 space-y-2">
+          <p className="text-sm font-semibold text-muted-foreground">Funcionários atuais</p>
+          {(employees.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Ainda sem funcionários.</p>
+          ) : (
+            employees.data?.map((e) => (
+              <div key={e.user_id} className="flex items-center justify-between rounded-lg border p-3">
+                <span className="truncate text-sm">{e.email}</span>
+                <Button variant="ghost" size="icon" onClick={() => remove.mutate(e.user_id)}>
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+        <DialogFooter />
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function AppShell({
   title,
@@ -99,13 +204,14 @@ export function AppShell({
           ))}
         </nav>
 
-        <div className="absolute inset-x-4 bottom-4">
+        <div className="absolute inset-x-4 bottom-4 space-y-2">
           <div className="mb-2 flex items-center gap-2 px-3">
             <Badge variant={isAdmin ? "default" : "secondary"} className="text-[10px]">
               {isAdmin ? "Dono" : "Funcionário"}
             </Badge>
           </div>
           <p className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</p>
+          {isAdmin ? <TeamDialog /> : null}
           <Button variant="outline" className="w-full justify-start gap-2" onClick={() => signOut()}>
             <LogOut className="size-4" />
             Terminar sessão
