@@ -83,9 +83,32 @@ function DebtsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const remind = useMutation({
+    mutationFn: async (id: string) => {
+      setRemindingId(id);
+      return await sendReminder({ data: { debtId: id } });
+    },
+    onSettled: () => setRemindingId(null),
+    onSuccess: (res) => {
+      if (res.sent) {
+        toast.success("Lembrete enviado por WhatsApp");
+        qc.invalidateQueries();
+        return;
+      }
+      if (res.waLink) {
+        window.open(res.waLink, "_blank", "noopener");
+        toast.message(res.error || "Abrimos o WhatsApp com a mensagem pronta.");
+      } else {
+        toast.error(res.error || "Não foi possível enviar o lembrete.");
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const open = (debts.data ?? []).filter((d) => d.status !== "PAID");
   const totalOpen = open.reduce((a, d) => a + Number(d.remaining_amount), 0);
   const current = (debts.data ?? []).find((d) => d.id === debtId);
+
 
   return (
     <AppShell title="Dívidas" subtitle={`${open.length} em aberto · ${money(totalOpen)} por receber`}>
