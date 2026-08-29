@@ -36,6 +36,8 @@ function DebtsPage() {
   const [debtId, setDebtId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("CASH");
+   const [remindingId, setRemindingId] = useState<string | null>(null);
+  const sendReminder = useServerFn(sendDebtReminder);
 
   const debts = useQuery({
     queryKey: ["debts", user?.id],
