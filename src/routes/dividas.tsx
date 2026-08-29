@@ -33,11 +33,11 @@ export const Route = createFileRoute("/dividas")({
 function DebtsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const sendReminder = useServerFn(sendDebtReminder);
   const [debtId, setDebtId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("CASH");
-   const [remindingId, setRemindingId] = useState<string | null>(null);
-  const sendReminder = useServerFn(sendDebtReminder);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
 
   const debts = useQuery({
     queryKey: ["debts", user?.id],
@@ -133,27 +133,27 @@ function DebtsPage() {
                     <p className="font-bold">{money(Number(d.remaining_amount))}</p>
                     <p className="text-xs text-muted-foreground">de {money(Number(d.original_amount))}</p>
                   </div>
-                                   {d.status !== "PAID" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={remind.isPending && remindingId === d.id}
-                      onClick={() => remind.mutate(d.id)}
-                    >
-                      <MessageCircle className="mr-1 size-3.5" />
-                      {remind.isPending && remindingId === d.id ? "A enviar…" : "Lembrar"}
-                    </Button>
-                  )}
                   {d.status !== "PAID" && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setDebtId(d.id);
-                        setAmount(String(d.remaining_amount));
-                      }}
-                    >
-                      Receber
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => remind.mutate(d.id)}
+                        disabled={remindingId === d.id}
+                      >
+                        <MessageCircle className="size-4" />
+                        {remindingId === d.id ? "A enviar…" : "Lembrar"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setDebtId(d.id);
+                          setAmount(String(d.remaining_amount));
+                        }}
+                      >
+                        Receber
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardContent>
