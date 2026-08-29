@@ -177,11 +177,20 @@ export const askAssistant = createServerFn({ method: "POST" })
       }
 
       if (name === "update_product") {
-        const patch: Record<string, unknown> = {};
-        for (const k of ["name", "sale_price", "cost_price", "min_stock", "status"]) {
-          if (args[k] !== undefined) patch[k] = args[k];
-        }
+        const patch: {
+          name?: string;
+          sale_price?: number;
+          cost_price?: number;
+          min_stock?: number;
+          status?: string;
+        } = {};
+        if (args["name"] !== undefined) patch.name = String(args["name"]);
+        if (args["sale_price"] !== undefined) patch.sale_price = Number(args["sale_price"]);
+        if (args["cost_price"] !== undefined) patch.cost_price = Number(args["cost_price"]);
+        if (args["min_stock"] !== undefined) patch.min_stock = Number(args["min_stock"]);
+        if (args["status"] !== undefined) patch.status = String(args["status"]);
         if (Object.keys(patch).length === 0) return { error: "Nada para atualizar." };
+
         const { data: row, error } = await supabase
           .from("products")
           .update(patch)
