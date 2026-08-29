@@ -5,11 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, Send } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { AssistantReport } from "@/components/AssistantReport";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { askAssistant } from "@/lib/assistant.functions";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/assistente")({
   head: () => ({
@@ -29,10 +29,10 @@ export const Route = createFileRoute("/assistente")({
 type Msg = { role: "user" | "assistant"; content: string };
 
 const SUGGESTIONS = [
-  "Faz um relatório das vendas dos últimos 7 dias",
+  "Faz um relatório das vendas dos últimos 30 dias, com gráfico de evolução",
   "Quais produtos estão com estoque baixo?",
-  "Quem são os clientes com maior dívida?",
-  "Qual o meu produto mais lucrativo?",
+  "Quem são os clientes com maior dívida, numa tabela?",
+  "Qual o meu produto mais lucrativo? mostra num gráfico",
 ];
 
 function AssistantPage() {
@@ -70,10 +70,10 @@ function AssistantPage() {
   return (
     <AppShell
       title="Assistente IA"
-      subtitle="Analisa o negócio, gera relatórios e altera dados a pedido"
+      subtitle="Analisa o negócio, gera relatórios com tabelas e gráficos, e altera dados a pedido"
       adminOnly
     >
-      <div className="mx-auto flex h-[calc(100vh-11rem)] max-w-3xl flex-col">
+      <div className="mx-auto flex h-[calc(100vh-11rem)] max-w-4xl flex-col">
         <div className="flex-1 space-y-4 overflow-y-auto pr-1">
           {messages.length === 0 && (
             <Card>
@@ -82,7 +82,8 @@ function AssistantPage() {
                   <Sparkles className="size-4 text-primary" /> Como posso ajudar?
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Peça relatórios, análises ou alterações — por exemplo “aumenta o preço do pão para 150”.
+                  Peça relatórios, análises com tabelas e gráficos, ou alterações — por exemplo
+                  “aumenta o preço do pão para 150”.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {SUGGESTIONS.map((s) => (
@@ -100,18 +101,21 @@ function AssistantPage() {
             </Card>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-              <div
-                className={cn(
-                  "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm",
-                  m.role === "user" ? "bg-primary text-primary-foreground" : "border bg-card",
-                )}
-              >
-                {m.content}
+          {messages.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-3 text-sm text-primary-foreground">
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ) : (
+              <div key={i} className="flex justify-start">
+                <div className="w-full max-w-[95%] rounded-2xl border bg-card px-4 py-3">
+                  <AssistantReport content={m.content} />
+                </div>
+              </div>
+            ),
+          )}
 
           {send.isPending && (
             <div className="flex justify-start">
