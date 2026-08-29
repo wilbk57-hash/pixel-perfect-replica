@@ -16,7 +16,7 @@ const TOOLS = [
     function: {
       name: "get_snapshot",
       description:
-        "Obtém um retrato completo do negócio: produtos, estoque, clientes, dívidas e resumo de vendas. Use sempre antes de responder a perguntas de análise.",
+        "Obtém um retrato completo do negócio: produtos, estoque, clientes, dívidas, resumo de vendas e a evolução diária de vendas/lucro dos últimos 30 dias. Use sempre antes de responder a perguntas de análise.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
@@ -116,6 +116,26 @@ const TOOLS = [
 
 const WRITE_TOOLS = new Set(["update_product", "create_product", "adjust_stock", "update_customer"]);
 
+const SYSTEM_PROMPT_BASE = [
+  "És o assistente do BK BUSINESS, um sistema de gestão de negócio (PDV, estoque, produção, clientes e dívidas).",
+  "Responde SEMPRE em português de Portugal, com relatórios claros, bem estruturados e fáceis de ler rapidamente.",
+  "A moeda é FCFA (XOF). Formata sempre valores monetários com separador de milhares, ex.: 12.500 FCFA.",
+  "Antes de analisar ou responder sobre dados, chama a ferramenta get_snapshot (usa list_sales quando precisares de detalhe item a item por período).",
+  "",
+  "REGRAS DE FORMATAÇÃO (Markdown):",
+  "- Começa cada relatório com um título curto em ## .",
+  "- Usa **negrito** só para destacar números-chave ou conclusões, sem exagerar.",
+  "- Sempre que houver 3 ou mais itens comparáveis (produtos, clientes, vendas, dívidas), apresenta-os numa tabela Markdown (GFM) com cabeçalho claro — nunca como lista corrida de números.",
+  "- Sempre que ajudar a perceber uma tendência, evolução ou distribuição (vendas ao longo do tempo, produtos mais vendidos, dívidas por cliente), insere um bloco de código com a linguagem 'chart' contendo APENAS um JSON válido, sem texto à volta, neste formato:",
+  '  {"type":"bar|line|pie","title":"Título curto","xKey":"campo_do_eixo_x","data":[{"campo_do_eixo_x":"...","serie1":123}],"series":[{"key":"serie1","label":"Nome legível"}]}',
+  "  Para 'pie', cada item de 'data' deve ter um campo de nome (usa xKey a apontar para ele) e um campo 'value'.",
+  "  Usa 'line' para evolução no tempo, 'bar' para comparar categorias, 'pie' para proporções de um total.",
+  "- Não repitas a mesma informação em texto, tabela e gráfico ao mesmo tempo — escolhe o formato mais claro para cada dado e complementa com uma frase curta de interpretação.",
+  "- Termina relatórios com mais de um bloco de dados com uma secção final '### Conclusão' com 1-2 frases objetivas de recomendação prática.",
+  "",
+  "Nunca inventes dados que não vieram das ferramentas.",
+].join("\n");
+
 export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: AssistantInput) => {
@@ -138,7 +158,8 @@ export const askAssistant = createServerFn({ method: "POST" })
       }
 
       if (name === "get_snapshot") {
-        const [products, customers, debts, sales] = await Promise.all([
+        const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+        const [products, customers, debts, sales, salesTrendRaw] = await Promise.all([
           supabase
             .from("products")
             .select("id, name, unit, sale_price, cost_price, current_stock, min_stock, product_type, status"),
@@ -152,7 +173,25 @@ export const askAssistant = createServerFn({ method: "POST" })
             .select("sale_number, customer_name, final_total, gross_profit, payment_status, created_at")
             .order("created_at", { ascending: false })
             .limit(100),
+          supabase
+            .from("sales")
+            .select("final_total, gross_profit, created_at")
+            .gte("created_at", since30)
+            .order("created_at", { ascending: true }),
         ]);
+
+        const trendMap = new Map<string, { total: number; lucro: number }>();
+        for (const row of salesTrendRaw.data ?? []) {
+          const day = new Date(row.created_at as string).toISOString().slice(0, 10);
+          const entry = trendMap.get(day) ?? { total: 0, lucro: 0 };
+          entry.total += Number(row.final_total) || 0;
+          entry.lucro += Number(row.gross_profit) || 0;
+          trendMap.set(day, entry);
+        }
+        const vendas_por_dia_ultimos_30_dias = Array.from(trendMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([dia, v]) => ({ dia, total: Math.round(v.total), lucro: Math.round(v.lucro) }));
+
         return {
           moeda: "FCFA",
           data_actual: new Date().toISOString(),
@@ -160,6 +199,7 @@ export const askAssistant = createServerFn({ method: "POST" })
           clientes: customers.data ?? [],
           dividas_em_aberto: debts.data ?? [],
           ultimas_vendas: sales.data ?? [],
+          vendas_por_dia_ultimos_30_dias,
         };
       }
 
@@ -263,15 +303,11 @@ export const askAssistant = createServerFn({ method: "POST" })
       {
         role: "system",
         content: [
-          "És o assistente do BK BUSINESS, um sistema de gestão de negócio (PDV, estoque, produção, clientes e dívidas).",
-          "Responde SEMPRE em português de Portugal, de forma curta, prática e com números.",
-          "A moeda é FCFA (XOF).",
-          "Antes de analisar ou responder sobre dados, chama a ferramenta get_snapshot.",
+          SYSTEM_PROMPT_BASE,
           canEdit
             ? "Podes alterar dados quando o utilizador pedir claramente. Confirma no fim o que alteraste."
             : "Este utilizador é funcionário: NÃO podes alterar dados nem revelar lucros, custos ou margens. Nesse caso explica que só o dono tem acesso.",
-          "Para relatórios usa listas curtas com títulos e valores. Não inventes dados que não vieram das ferramentas.",
-        ].join(" "),
+        ].join("\n"),
       },
       ...data.messages.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
     ];
