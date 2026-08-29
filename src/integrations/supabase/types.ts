@@ -716,18 +716,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          owner_id: string | null
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          owner_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          owner_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -747,6 +750,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      business_id: { Args: { _user_id: string }; Returns: string }
       create_sale: {
         Args: {
           p_customer_id?: string
@@ -765,6 +769,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      invite_employee: { Args: { p_email: string }; Returns: undefined }
+      list_employees: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          user_id: string
+        }[]
+      }
       pay_debt: {
         Args: {
           p_amount: number
@@ -778,6 +791,7 @@ export type Database = {
         Args: { p_batches?: number; p_notes?: string; p_recipe_id: string }
         Returns: string
       }
+      remove_employee: { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "dono" | "funcionario"
