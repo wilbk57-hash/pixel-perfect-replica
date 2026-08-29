@@ -9,37 +9,42 @@ import {
   HandCoins,
   FlaskConical,
   ReceiptText,
+  Sparkles,
   LogOut,
   Menu,
   Leaf,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "Painel", icon: LayoutDashboard },
-  { to: "/pdv", label: "PDV", icon: ShoppingCart },
-  { to: "/vendas", label: "Vendas", icon: ReceiptText },
-  { to: "/produtos", label: "Produtos", icon: Package },
-  { to: "/estoque", label: "Estoque", icon: Boxes },
-  { to: "/producao", label: "Produção", icon: FlaskConical },
-  { to: "/clientes", label: "Clientes", icon: Users },
-  { to: "/dividas", label: "Dívidas", icon: HandCoins },
+  { to: "/", label: "Painel", icon: LayoutDashboard, adminOnly: false },
+  { to: "/pdv", label: "PDV", icon: ShoppingCart, adminOnly: false },
+  { to: "/vendas", label: "Vendas", icon: ReceiptText, adminOnly: false },
+  { to: "/produtos", label: "Produtos", icon: Package, adminOnly: true },
+  { to: "/estoque", label: "Estoque", icon: Boxes, adminOnly: false },
+  { to: "/producao", label: "Produção", icon: FlaskConical, adminOnly: true },
+  { to: "/clientes", label: "Clientes", icon: Users, adminOnly: false },
+  { to: "/dividas", label: "Dívidas", icon: HandCoins, adminOnly: false },
+  { to: "/assistente", label: "Assistente IA", icon: Sparkles, adminOnly: true },
 ] as const;
 
 export function AppShell({
   title,
   subtitle,
   actions,
+  adminOnly,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  adminOnly?: boolean;
   children: ReactNode;
 }) {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, role, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -54,6 +59,9 @@ export function AppShell({
       </div>
     );
   }
+
+  const items = NAV.filter((n) => !n.adminOnly || isAdmin);
+  const blocked = adminOnly && role !== null && !isAdmin;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -74,7 +82,7 @@ export function AppShell({
         </div>
 
         <nav className="space-y-1">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {items.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}
@@ -92,6 +100,11 @@ export function AppShell({
         </nav>
 
         <div className="absolute inset-x-4 bottom-4">
+          <div className="mb-2 flex items-center gap-2 px-3">
+            <Badge variant={isAdmin ? "default" : "secondary"} className="text-[10px]">
+              {isAdmin ? "Dono" : "Funcionário"}
+            </Badge>
+          </div>
           <p className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</p>
           <Button variant="outline" className="w-full justify-start gap-2" onClick={() => signOut()}>
             <LogOut className="size-4" />
@@ -123,9 +136,23 @@ export function AppShell({
             <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
             {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
           </div>
-          {actions}
+          {!blocked ? actions : null}
         </header>
-        <div className="p-4 md:p-8">{children}</div>
+        <div className="p-4 md:p-8">
+          {blocked ? (
+            <div className="mx-auto max-w-md rounded-xl border p-8 text-center">
+              <p className="font-semibold">Área reservada ao dono</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                O seu perfil de funcionário não tem acesso a esta secção.
+              </p>
+              <Button className="mt-4" asChild>
+                <Link to="/pdv">Ir para o PDV</Link>
+              </Button>
+            </div>
+          ) : (
+            children
+          )}
+        </div>
       </main>
     </div>
   );

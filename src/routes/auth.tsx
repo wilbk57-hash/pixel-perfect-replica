@@ -29,6 +29,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [role, setRole] = useState<"dono" | "funcionario">("dono");
+
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/" });
@@ -51,13 +53,14 @@ function AuthPage() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { full_name: fullName, business_name: businessName },
+        data: { full_name: fullName, business_name: businessName, role },
       },
     });
     setBusy(false);
     if (error) toast.error(error.message);
     else toast.success("Conta criada! Já pode entrar.");
   }
+
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -132,6 +135,31 @@ function AuthPage() {
                     onChange={(e) => setBusinessName(e.target.value)}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Tipo de conta</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { value: "dono", label: "Dono", hint: "Acesso total" },
+                        { value: "funcionario", label: "Funcionário", hint: "Vendas e clientes" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setRole(opt.value)}
+                        className={
+                          "rounded-lg border p-3 text-left text-sm transition-colors " +
+                          (role === opt.value ? "border-primary bg-accent" : "hover:bg-muted")
+                        }
+                      >
+                        <span className="block font-medium">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="email2">Email</Label>
                   <Input id="email2" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

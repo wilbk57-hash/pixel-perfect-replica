@@ -177,11 +177,20 @@ export const askAssistant = createServerFn({ method: "POST" })
       }
 
       if (name === "update_product") {
-        const patch: Record<string, unknown> = {};
-        for (const k of ["name", "sale_price", "cost_price", "min_stock", "status"]) {
-          if (args[k] !== undefined) patch[k] = args[k];
-        }
+        const patch: {
+          name?: string;
+          sale_price?: number;
+          cost_price?: number;
+          min_stock?: number;
+          status?: string;
+        } = {};
+        if (args["name"] !== undefined) patch.name = String(args["name"]);
+        if (args["sale_price"] !== undefined) patch.sale_price = Number(args["sale_price"]);
+        if (args["cost_price"] !== undefined) patch.cost_price = Number(args["cost_price"]);
+        if (args["min_stock"] !== undefined) patch.min_stock = Number(args["min_stock"]);
+        if (args["status"] !== undefined) patch.status = String(args["status"]);
         if (Object.keys(patch).length === 0) return { error: "Nada para atualizar." };
+
         const { data: row, error } = await supabase
           .from("products")
           .update(patch)
@@ -223,11 +232,20 @@ export const askAssistant = createServerFn({ method: "POST" })
       }
 
       if (name === "update_customer") {
-        const patch: Record<string, unknown> = {};
-        for (const k of ["name", "phone", "credit_limit", "notes", "is_active"]) {
-          if (args[k] !== undefined) patch[k] = args[k];
-        }
+        const patch: {
+          name?: string;
+          phone?: string;
+          credit_limit?: number;
+          notes?: string;
+          is_active?: boolean;
+        } = {};
+        if (args["name"] !== undefined) patch.name = String(args["name"]);
+        if (args["phone"] !== undefined) patch.phone = String(args["phone"]);
+        if (args["credit_limit"] !== undefined) patch.credit_limit = Number(args["credit_limit"]);
+        if (args["notes"] !== undefined) patch.notes = String(args["notes"]);
+        if (args["is_active"] !== undefined) patch.is_active = Boolean(args["is_active"]);
         if (Object.keys(patch).length === 0) return { error: "Nada para atualizar." };
+
         const { data: row, error } = await supabase
           .from("customers")
           .update(patch)
