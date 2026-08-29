@@ -22,15 +22,15 @@ export const Route = createFileRoute("/vendas")({
 });
 
 function SalesPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const sales = useQuery({
     queryKey: ["sales", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales")
+      const { data, error } = await (supabase as any)
+        .from("sales_secure")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200);
@@ -50,12 +50,19 @@ function SalesPage() {
   });
 
   const totals = (sales.data ?? []).reduce(
-    (a, s) => ({ total: a.total + Number(s.final_total), profit: a.profit + Number(s.gross_profit) }),
+    (a, s) => ({ total: a.total + Number(s.final_total), profit: a.profit + Number(s.gross_profit ?? 0) }),
     { total: 0, profit: 0 },
   );
 
   return (
-    <AppShell title="Vendas" subtitle={`${sales.data?.length ?? 0} venda(s) · ${money(totals.total)} · lucro ${money(totals.profit)}`}>
+    <AppShell
+      title="Vendas"
+      subtitle={
+        isAdmin
+          ? `${sales.data?.length ?? 0} venda(s) · ${money(totals.total)} · lucro ${money(totals.profit)}`
+          : `${sales.data?.length ?? 0} venda(s) · ${money(totals.total)}`
+      }
+    >
       <div className="space-y-3">
         {(sales.data ?? []).map((s) => (
           <Card key={s.id}>
@@ -73,7 +80,9 @@ function SalesPage() {
                   </Badge>
                   <div className="text-right">
                     <p className="font-bold">{money(Number(s.final_total))}</p>
-                    <p className="text-xs text-muted-foreground">lucro {money(Number(s.gross_profit))}</p>
+                    {isAdmin && (
+                      <p className="text-xs text-muted-foreground">lucro {money(Number(s.gross_profit ?? 0))}</p>
+                    )}
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
                     {openId === s.id ? "Fechar" : "Detalhes"}
