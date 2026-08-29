@@ -148,9 +148,10 @@ function ProductionPage() {
   const list = recipes.data ?? [];
 
   return (
-    <AppShell
+       <AppShell
       title="Produção"
       subtitle={`${list.length} receita(s)`}
+      adminOnly
       actions={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
