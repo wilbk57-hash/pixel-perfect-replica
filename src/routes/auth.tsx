@@ -51,13 +51,14 @@ function AuthPage() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { full_name: fullName, business_name: businessName },
+        data: { full_name: fullName, business_name: businessName, role },
       },
     });
     setBusy(false);
     if (error) toast.error(error.message);
     else toast.success("Conta criada! Já pode entrar.");
   }
+
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
