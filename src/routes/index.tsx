@@ -32,9 +32,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { user } = useAuth();
-
-  const { data } = useQuery({
+    const { user, isAdmin } = useAuth();
+    const { data } = useQuery({
     queryKey: ["dashboard", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -70,9 +69,11 @@ function Dashboard() {
     },
   });
 
-  const cards = [
+    const cards = [
     { label: "Vendas de hoje", value: money(data?.todayTotal), icon: ShoppingCart, hint: `${data?.todayCount ?? 0} venda(s)` },
-    { label: "Lucro bruto hoje", value: money(data?.todayProfit), icon: TrendingUp, hint: "margem do dia" },
+    ...(isAdmin
+      ? [{ label: "Lucro bruto hoje", value: money(data?.todayProfit), icon: TrendingUp, hint: "margem do dia" }]
+      : []),
     { label: "Vendas do mês", value: money(data?.monthTotal), icon: TrendingUp, hint: "acumulado" },
     { label: "Dívidas por receber", value: money(data?.debtTotal), icon: HandCoins, hint: "clientes a crédito" },
   ];
