@@ -29,8 +29,8 @@ function SalesPage() {
     queryKey: ["sales", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("sales_secure")
+      const { data, error } = await supabase
+        .from("sales")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200);
