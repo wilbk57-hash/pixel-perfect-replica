@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Tag, Sparkles, ImageOff, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Tag, Sparkles, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -78,7 +78,6 @@ function ProductsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [showInactive, setShowInactive] = useState(false);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [catOpen, setCatOpen] = useState(false);
@@ -87,7 +86,6 @@ function ProductsPage() {
   const [imageTarget, setImageTarget] = useState<{ id: string; name: string; description: string } | null>(null);
   const [customInstructions, setCustomInstructions] = useState("");
   const [packaging, setPackaging] = useState("auto");
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const generateImage = useServerFn(generateProductImage);
 
   const products = useQuery({
@@ -126,7 +124,6 @@ function ProductsPage() {
           id: item.localId,
           current_stock: payload.current_stock ?? 0,
           image_url: null,
-          status: "ACTIVE",
           _pending: true,
         });
       }
@@ -224,39 +221,7 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteProduct = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase.rpc("delete_product", { p_product_id: id });
-      if (error) throw error;
-      return data as "deleted" | "archived";
-    },
-    onSuccess: (result) => {
-      toast.success(
-        result === "deleted"
-          ? "Produto eliminado"
-          : "Produto tinha histórico (vendas, receitas ou movimentos) — foi marcado como inativo em vez de apagado",
-      );
-      setDeleteTarget(null);
-      qc.invalidateQueries({ queryKey: ["products"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const reactivate = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").update({ status: "ACTIVE" }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Produto reativado");
-      qc.invalidateQueries({ queryKey: ["products"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const filtered = mergedProducts
-    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-    .filter((p) => showInactive || p.status === "ACTIVE");
+  const filtered = mergedProducts.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
 
   return (
@@ -410,27 +375,16 @@ function ProductsPage() {
         </div>
       }
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="Pesquisar produto…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="size-4 rounded border-input"
-          />
-          Mostrar inativos
-        </label>
-      </div>
+      <Input
+        placeholder="Pesquisar produto…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="mb-4 max-w-sm"
+      />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
-          <Card key={p.id} className={`overflow-hidden ${p.status !== "ACTIVE" ? "opacity-60" : ""}`}>
+          <Card key={p.id} className="overflow-hidden">
             <div className="relative aspect-square w-full overflow-hidden bg-muted">
               {p.image_url ? (
                 <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
@@ -442,11 +396,6 @@ function ProductsPage() {
               {p._pending && (
                 <Badge variant="outline" className="absolute left-2 top-2 bg-background/90 text-[10px]">
                   Por sincronizar
-                </Badge>
-              )}
-              {p.status !== "ACTIVE" && (
-                <Badge variant="secondary" className="absolute left-2 top-2 bg-background/90 text-[10px]">
-                  Inativo
                 </Badge>
               )}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 pt-10">
@@ -473,21 +422,7 @@ function ProductsPage() {
               </Button>
             </div>
             <CardContent className="pt-4">
-              <div className="flex items-start justify-end gap-1">
-                {p.status !== "ACTIVE" ? (
-                  <Button variant="ghost" size="icon" title="Reativar" onClick={() => reactivate.mutate(p.id)}>
-                    <RotateCcw className="size-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Eliminar"
-                    onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                )}
+              <div className="flex items-start justify-end gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -585,31 +520,6 @@ function ProductsPage() {
             >
               <Sparkles className="size-4" />
               {generateProductPhoto.isPending ? "A gerar…" : "Gerar imagem"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Eliminar {deleteTarget?.name}?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Se este produto já teve vendas, receitas ou movimentos de estoque, não será apagado por completo
-            (para não perder o histórico) — fica apenas marcado como inativo e desaparece do PDV e Estoque.
-            Se nunca foi usado, é removido definitivamente.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && deleteProduct.mutate(deleteTarget.id)}
-              disabled={deleteProduct.isPending}
-            >
-              Eliminar
             </Button>
           </DialogFooter>
         </DialogContent>
