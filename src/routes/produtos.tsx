@@ -327,18 +327,22 @@ function ProductsPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
           <Card key={p.id} className="overflow-hidden">
-            <div className="relative">
+            <div className="relative aspect-square w-full overflow-hidden bg-muted">
               {p.image_url ? (
-                <img src={p.image_url} alt={p.name} className="h-40 w-full object-cover" />
+                <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                   <ImageOff className="size-8" />
                 </div>
               )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 pt-10">
+                <p className="truncate text-sm font-semibold text-white drop-shadow-sm">{p.name}</p>
+                <p className="truncate text-xs text-white/80">{catName_(p.category_id)}</p>
+              </div>
               <Button
                 variant="secondary"
                 size="sm"
-                className="absolute bottom-2 right-2 shadow"
+                className="absolute right-2 top-2 shadow"
                 disabled={generatingId === p.id}
                 onClick={() =>
                   generateProductPhoto.mutate({ id: p.id, name: p.name, description: p.description })
@@ -353,11 +357,7 @@ function ProductsPage() {
               </Button>
             </div>
             <CardContent className="pt-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">{catName_(p.category_id)}</p>
-                </div>
+              <div className="flex items-start justify-end gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -381,7 +381,7 @@ function ProductsPage() {
                   <Pencil className="size-4" />
                 </Button>
               </div>
-              <div className="mt-4 flex items-end justify-between">
+              <div className="mt-2 flex items-end justify-between">
                 <div>
                   <p className="text-lg font-bold">{money(Number(p.sale_price))}</p>
                   <p className="text-xs text-muted-foreground">custo {money(Number(p.cost_price))}</p>
