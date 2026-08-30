@@ -1,20 +1,39 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type GenerateImageInput = { productId: string; name: string; description?: string; customInstructions?: string };
+type GenerateImageInput = {
+  productId: string;
+  name: string;
+  description?: string;
+  customInstructions?: string;
+  packaging?: string;
+};
 
-function buildPrompt(name: string, description?: string, customInstructions?: string) {
+const PACKAGING_PROMPTS: Record<string, string> = {
+  glass_bottle: "Use exactly a transparent glass bottle as the container, showing the product/liquid clearly through the glass.",
+  plastic_bottle: "Use exactly a plastic bottle (PET-style) as the container.",
+  can: "Use exactly a metal can as the container.",
+  jar: "Use exactly a glass jar with a lid as the container.",
+  box: "Use exactly a cardboard or paperboard box/carton as the packaging.",
+  none: "Do NOT use any bottle, can, jar or box. Show only the raw main ingredient itself, with no packaging or container at all.",
+};
+
+function buildPrompt(name: string, description?: string, customInstructions?: string, packaging?: string) {
   const extra = description?.trim() ? `, ${description.trim()}` : "";
+  const packagingLine = packaging && PACKAGING_PROMPTS[packaging] ? ` ${PACKAGING_PROMPTS[packaging]}` : "";
+
   const base =
     `Ultra realistic professional commercial product photography of "${name}"${extra}. ` +
     `Identify the single main raw ingredient of this product and make it the clear visual hero of ` +
-    `the frame, in sharp macro-like focus, with its natural texture, color and freshness fully visible. ` +
-    `If it is a food or beverage product, show it inside a realistic container appropriate for that ` +
-    `product (glass bottle, jar, box or package), with the main ingredient prominently placed beside ` +
-    `or around it. Studio softbox lighting from the top, shallow depth of field, clean neutral ` +
-    `background. Compose with generous negative space and a subtly darker, softly shadowed tone in ` +
-    `the bottom third of the frame, so text can be overlaid there later. Square 1:1 composition, ` +
-    `ultra realistic, 4k, high-end e-commerce photography, no text, no watermark, no logo.`;
+    `the frame, in sharp macro-like focus, with its natural texture, color and freshness fully visible.` +
+    packagingLine +
+    (packaging && packaging !== "none"
+      ? " Place the main ingredient prominently beside or around the container."
+      : "") +
+    ` Studio softbox lighting from the top, shallow depth of field, clean neutral background. Compose ` +
+    `with generous negative space and a subtly darker, softly shadowed tone in the bottom third of the ` +
+    `frame, so text can be overlaid there later. Square 1:1 composition, ultra realistic, 4k, high-end ` +
+    `e-commerce photography, no text, no watermark, no logo.`;
 
   if (!customInstructions?.trim()) return base;
 
@@ -34,6 +53,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
       name: input.name.trim(),
       description: input.description ?? "",
       customInstructions: input.customInstructions ?? "",
+      packaging: input.packaging ?? "",
     };
   })
   .handler(async ({ data, context }) => {
@@ -42,7 +62,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
     const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("Serviço de IA indisponível. Tente novamente mais tarde.");
 
-    const prompt = buildPrompt(data.name, data.description, data.customInstructions);
+    const prompt = buildPrompt(data.name, data.description, data.customInstructions, data.packaging);
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
