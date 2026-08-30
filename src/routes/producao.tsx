@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Factory, Trash2 } from "lucide-react";
+import { Plus, Factory, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -35,15 +35,18 @@ export const Route = createFileRoute("/producao")({
 });
 
 type Ingredient = { product_id: string; quantity: string };
+const EMPTY_INGREDIENT: Ingredient = { product_id: "", quantity: "" };
 
 function ProductionPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [outputId, setOutputId] = useState("");
   const [outputQty, setOutputQty] = useState("1");
-  const [ingredients, setIngredients] = useState<Ingredient[]>([{ product_id: "", quantity: "" }]);
+  const [additionalCost, setAdditionalCost] = useState("0");
+  const [ingredients, setIngredients] = useState<Ingredient[]>([{ ...EMPTY_INGREDIENT }]);
   const [runId, setRunId] = useState<string | null>(null);
   const [runQty, setRunQty] = useState("1");
 
@@ -84,45 +87,48 @@ function ProductionPage() {
     },
   });
 
-  const productName = (id: string) => products.data?.find((p) => p.id === id)?.name ?? "—";
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setOutputId("");
+    setOutputQty("1");
+    setAdditionalCost("0");
+    setIngredients([{ ...EMPTY_INGREDIENT }]);
+  }
 
-  const createRecipe = useMutation({
+  function openEdit(r: any) {
+    setEditingId(r.id);
+    setName(r.name);
+    setOutputId(r.product_id ?? "");
+    setOutputQty(String(r.yield_quantity));
+    setAdditionalCost(String(r.additional_cost ?? 0));
+    setIngredients(
+      (r.recipe_ingredients ?? []).length
+        ? r.recipe_ingredients.map((i: any) => ({ product_id: i.product_id, quantity: String(i.quantity) }))
+        : [{ ...EMPTY_INGREDIENT }],
+    );
+    setOpen(true);
+  }
+
+  const saveRecipe = useMutation({
     mutationFn: async () => {
-      const out = products.data?.find((p) => p.id === outputId);
-      const { data, error } = await supabase
-        .from("recipes")
-        .insert({
-          user_id: user!.id,
-          name,
-          product_id: outputId,
-          product_name: out?.name ?? "",
-          yield_quantity: Number(outputQty) || 1,
-          yield_unit: out?.unit ?? "un",
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
       const rows = ingredients
         .filter((i) => i.product_id && Number(i.quantity) > 0)
-        .map((i) => ({
-          recipe_id: data.id,
-          user_id: user!.id,
-          product_id: i.product_id,
-          product_name: productName(i.product_id),
-          quantity: Number(i.quantity),
-        }));
-      if (rows.length) {
-        const { error: e2 } = await supabase.from("recipe_ingredients").insert(rows);
-        if (e2) throw e2;
-      }
+        .map((i) => ({ product_id: i.product_id, quantity: Number(i.quantity) }));
+      const { error } = await supabase.rpc("save_recipe", {
+        p_recipe_id: editingId,
+        p_name: name,
+        p_product_id: outputId,
+        p_yield_quantity: Number(outputQty) || 1,
+        p_additional_cost: Number(additionalCost) || 0,
+        p_ingredients: rows,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Receita criada");
+      toast.success(editingId ? "Receita atualizada" : "Receita criada");
       setOpen(false);
-      setName("");
-      setOutputId("");
-      setOutputQty("1");
-      setIngredients([{ product_id: "", quantity: "" }]);
+      resetForm();
       qc.invalidateQueries();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -148,20 +154,26 @@ function ProductionPage() {
   const list = recipes.data ?? [];
 
   return (
-       <AppShell
+    <AppShell
       title="Produção"
       subtitle={`${list.length} receita(s)`}
       adminOnly
       actions={
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={resetForm}>
               <Plus className="size-4" /> Receita
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Nova receita</DialogTitle>
+              <DialogTitle>{editingId ? "Editar receita" : "Nova receita"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -188,6 +200,10 @@ function ProductionPage() {
                   <Label>Quantidade produzida</Label>
                   <Input type="number" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Custo adicional (mão de obra, energia, etc.)</Label>
+                <Input type="number" value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} />
               </div>
 
               <div className="space-y-2">
@@ -234,14 +250,14 @@ function ProductionPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIngredients([...ingredients, { product_id: "", quantity: "" }])}
+                  onClick={() => setIngredients([...ingredients, { ...EMPTY_INGREDIENT }])}
                 >
                   <Plus className="size-4" /> Ingrediente
                 </Button>
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => createRecipe.mutate()} disabled={!name.trim() || !outputId}>
+              <Button onClick={() => saveRecipe.mutate()} disabled={!name.trim() || !outputId || saveRecipe.isPending}>
                 Guardar
               </Button>
             </DialogFooter>
@@ -261,9 +277,14 @@ function ProductionPage() {
                       produz {qty(Number(r.yield_quantity))} {r.yield_unit} · {r.product_name}
                     </p>
                   </div>
-                  <Button size="sm" onClick={() => setRunId(r.id)}>
-                    <Factory className="size-4" /> Produzir
-                  </Button>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="outline" size="icon" onClick={() => openEdit(r)}>
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button size="sm" onClick={() => setRunId(r.id)}>
+                      <Factory className="size-4" /> Produzir
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-3 space-y-1 text-sm">
                   {(r.recipe_ingredients ?? []).map((i) => (
