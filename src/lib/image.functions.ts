@@ -57,10 +57,16 @@ export const generateProductImage = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabase } = context;
 
     const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("Serviço de IA indisponível. Tente novamente mais tarde.");
+
+    // Resolve o dono efetivo do negócio (o próprio, ou o dono a quem o
+    // funcionário está associado), para guardar a imagem sempre na mesma
+    // pasta do negócio — independentemente de quem gera a imagem.
+    const { data: ownerId, error: ownerError } = await supabase.rpc("effective_owner_id");
+    if (ownerError || !ownerId) throw new Error("Não foi possível identificar o negócio.");
 
     const prompt = buildPrompt(data.name, data.description, data.customInstructions, data.packaging);
 
@@ -94,7 +100,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const path = `${userId}/${data.productId}.png`;
+    const path = `${ownerId}/${data.productId}.png`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
       .upload(path, bytes, { contentType: "image/png", upsert: true });
