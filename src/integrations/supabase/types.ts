@@ -108,6 +108,13 @@ export type Database = {
             referencedRelation: "sales"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "customer_debts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales_secure"
+            referencedColumns: ["id"]
+          },
         ]
       }
       customer_payments: {
@@ -323,6 +330,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_secure"
+            referencedColumns: ["id"]
+          },
         ]
       }
       production_orders: {
@@ -380,6 +394,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "production_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_secure"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "production_orders_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
@@ -396,6 +417,7 @@ export type Database = {
           current_stock: number
           description: string
           id: string
+          image_url: string | null
           min_stock: number
           name: string
           product_type: string
@@ -413,6 +435,7 @@ export type Database = {
           current_stock?: number
           description?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           name: string
           product_type?: string
@@ -430,6 +453,7 @@ export type Database = {
           current_stock?: number
           description?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           name?: string
           product_type?: string
@@ -517,6 +541,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "recipe_ingredients_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_secure"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "recipe_ingredients_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
@@ -576,6 +607,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "recipes_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_secure"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sale_items: {
@@ -630,10 +668,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_secure"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sale_items_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales_secure"
             referencedColumns: ["id"]
           },
         ]
@@ -738,7 +790,142 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_secure: {
+        Row: {
+          category_id: string | null
+          cost_price: number | null
+          created_at: string | null
+          current_stock: number | null
+          description: string | null
+          id: string | null
+          min_stock: number | null
+          name: string | null
+          product_type: string | null
+          sale_price: number | null
+          sku: string | null
+          status: string | null
+          unit: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          cost_price?: never
+          created_at?: string | null
+          current_stock?: number | null
+          description?: string | null
+          id?: string | null
+          min_stock?: number | null
+          name?: string | null
+          product_type?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          cost_price?: never
+          created_at?: string | null
+          current_stock?: number | null
+          description?: string | null
+          id?: string | null
+          min_stock?: number | null
+          name?: string | null
+          product_type?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_secure: {
+        Row: {
+          change_amount: number | null
+          cost_total: number | null
+          created_at: string | null
+          customer_id: string | null
+          customer_name: string | null
+          discount_amount: number | null
+          final_total: number | null
+          gross_profit: number | null
+          id: string | null
+          notes: string | null
+          paid_amount: number | null
+          payment_method: string | null
+          payment_status: string | null
+          remaining_debt: number | null
+          sale_number: string | null
+          status: string | null
+          subtotal: number | null
+          total_items: number | null
+          user_id: string | null
+        }
+        Insert: {
+          change_amount?: number | null
+          cost_total?: never
+          created_at?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          discount_amount?: number | null
+          final_total?: number | null
+          gross_profit?: never
+          id?: string | null
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          remaining_debt?: number | null
+          sale_number?: string | null
+          status?: string | null
+          subtotal?: number | null
+          total_items?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          change_amount?: number | null
+          cost_total?: never
+          created_at?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          discount_amount?: number | null
+          final_total?: number | null
+          gross_profit?: never
+          id?: string | null
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          remaining_debt?: number | null
+          sale_number?: string | null
+          status?: string | null
+          subtotal?: number | null
+          total_items?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       adjust_stock: {

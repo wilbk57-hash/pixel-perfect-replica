@@ -29,42 +29,41 @@ export const generateProductImage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const falKey = process.env["FAL_KEY"];
-    if (!falKey) {
-      throw new Error(
-        "FAL_KEY não configurada. Adicione a chave da fal.ai nas variáveis de ambiente do projeto.",
-      );
-    }
+    const apiKey = process.env["LOVABLE_API_KEY"];
+    if (!apiKey) throw new Error("Serviço de IA indisponível. Tente novamente mais tarde.");
 
     const prompt = buildPrompt(data.name, data.description);
 
-    const falRes = await fetch("https://fal.run/fal-ai/flux-pro/v1.1", {
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Key ${falKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        prompt,
-        image_size: "square_hd",
-        num_images: 1,
+        model: "google/gemini-2.5-flash-image",
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
       }),
     });
 
-    if (!falRes.ok) {
-      const errText = await falRes.text().catch(() => "");
-      throw new Error(`Falha ao gerar imagem (fal.ai): ${falRes.status} ${errText.slice(0, 200)}`);
+    if (!aiRes.ok) {
+      const errText = await aiRes.text().catch(() => "");
+      if (aiRes.status === 429) throw new Error("Limite de pedidos atingido. Tente novamente daqui a pouco.");
+      if (aiRes.status === 402) throw new Error("Créditos de IA esgotados. Recarregue para continuar.");
+      throw new Error(`Falha ao gerar imagem: ${aiRes.status} ${errText.slice(0, 200)}`);
     }
 
-    const falJson = (await falRes.json()) as { images?: Array<{ url?: string }> };
-    const imageUrl = falJson.images?.[0]?.url;
-    if (!imageUrl) {
-      throw new Error("A fal.ai não devolveu nenhuma imagem.");
-    }
+    const aiJson = (await aiRes.json()) as {
+      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
+    };
+    const dataUrl = aiJson.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!dataUrl) throw new Error("A IA não devolveu nenhuma imagem.");
 
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) throw new Error("Não foi possível descarregar a imagem gerada.");
-    const bytes = new Uint8Array(await imgRes.arrayBuffer());
+    const base64 = dataUrl.split(",")[1] ?? "";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
     const path = `${userId}/${data.productId}.png`;
     const { error: uploadError } = await supabase.storage
@@ -72,8 +71,11 @@ export const generateProductImage = createServerFn({ method: "POST" })
       .upload(path, bytes, { contentType: "image/png", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
-    const { data: publicUrlData } = supabase.storage.from("product-images").getPublicUrl(path);
-    const publicUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+    const { data: signed, error: signError } = await supabase.storage
+      .from("product-images")
+      .createSignedUrl(path, 60 * 60 * 24 * 365 * 5);
+    if (signError || !signed?.signedUrl) throw new Error(signError?.message ?? "Falha ao obter a imagem.");
+    const publicUrl = `${signed.signedUrl}&v=${Date.now()}`;
 
     const { error: updateError } = await supabase
       .from("products")
