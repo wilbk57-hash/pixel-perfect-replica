@@ -326,37 +326,33 @@ function ProductsPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
-          <Card key={p.id}>
-            <CardContent className="pt-6">
-              <div className="mb-3 flex items-center gap-3">
-                {p.image_url ? (
-                  <img
-                    src={p.image_url}
-                    alt={p.name}
-                    className="size-16 shrink-0 rounded-md border object-cover"
-                  />
-                ) : (
-                  <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                    <ImageOff className="size-5" />
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto"
-                  disabled={generatingId === p.id}
-                  onClick={() =>
-                    generateProductPhoto.mutate({ id: p.id, name: p.name, description: p.description })
-                  }
-                >
-                  <Sparkles className="size-4" />
-                  {generatingId === p.id
-                    ? "A gerar…"
-                    : p.image_url
-                      ? "Regenerar imagem"
-                      : "Gerar imagem IA"}
-                </Button>
-              </div>
+          <Card key={p.id} className="overflow-hidden">
+            <div className="relative">
+              {p.image_url ? (
+                <img src={p.image_url} alt={p.name} className="h-40 w-full object-cover" />
+              ) : (
+                <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                  <ImageOff className="size-8" />
+                </div>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="absolute bottom-2 right-2 shadow"
+                disabled={generatingId === p.id}
+                onClick={() =>
+                  generateProductPhoto.mutate({ id: p.id, name: p.name, description: p.description })
+                }
+              >
+                <Sparkles className="size-4" />
+                {generatingId === p.id
+                  ? "A gerar…"
+                  : p.image_url
+                    ? "Regenerar imagem"
+                    : "Gerar imagem IA"}
+              </Button>
+            </div>
+            <CardContent className="pt-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{p.name}</p>
