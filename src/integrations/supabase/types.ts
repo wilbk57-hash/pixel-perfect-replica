@@ -417,6 +417,7 @@ export type Database = {
           current_stock: number
           description: string
           id: string
+          image_url: string | null
           min_stock: number
           name: string
           product_type: string
@@ -434,6 +435,7 @@ export type Database = {
           current_stock?: number
           description?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           name: string
           product_type?: string
@@ -451,6 +453,7 @@ export type Database = {
           current_stock?: number
           description?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           name?: string
           product_type?: string
