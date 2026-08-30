@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, shortDate } from "@/lib/format";
+import { runOrQueue, usePendingQueue, type ProduceRecipePayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/producao")({
   head: () => ({
@@ -87,6 +88,8 @@ function ProductionPage() {
     },
   });
 
+  const pendingProductions = usePendingQueue("produce_recipe");
+
   function resetForm() {
     setEditingId(null);
     setName("");
@@ -136,14 +139,18 @@ function ProductionPage() {
 
   const produce = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("produce_recipe", {
-        p_recipe_id: runId!,
-        p_batches: Number(runQty) || 1,
+      const payload: ProduceRecipePayload = { p_recipe_id: runId!, p_batches: Number(runQty) || 1 };
+      return runOrQueue("produce_recipe", payload, "Produção", async () => {
+        const { error } = await supabase.rpc("produce_recipe", payload as any);
+        if (error) throw error;
       });
-      if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("Produção concluída");
+    onSuccess: (res) => {
+      toast.success(
+        res.offline
+          ? "Sem ligação — produção guardada neste aparelho. Toque em \"Sincronizar\" quando voltar online."
+          : "Produção concluída",
+      );
       setRunId(null);
       setRunQty("1");
       qc.invalidateQueries();
@@ -303,6 +310,18 @@ function ProductionPage() {
         <Card className="h-fit">
           <CardContent className="space-y-3 pt-6">
             <p className="font-semibold">Produções recentes</p>
+            {pendingProductions.map((o) => {
+              const recipe = list.find((r) => r.id === o.payload.p_recipe_id);
+              return (
+                <div key={o.localId} className="flex items-start justify-between text-sm opacity-70">
+                  <div className="min-w-0">
+                    <p className="truncate">{recipe?.name ?? "Receita"}</p>
+                    <p className="text-xs text-muted-foreground">Por sincronizar</p>
+                  </div>
+                  <Badge variant="outline">{o.payload.p_batches}x lote(s)</Badge>
+                </div>
+              );
+            })}
             {(orders.data ?? []).map((o) => (
               <div key={o.id} className="flex items-start justify-between text-sm">
                 <div className="min-w-0">
@@ -315,7 +334,7 @@ function ProductionPage() {
                 </div>
               </div>
             ))}
-            {(orders.data ?? []).length === 0 && (
+            {pendingProductions.length === 0 && (orders.data ?? []).length === 0 && (
               <p className="text-sm text-muted-foreground">Sem produções.</p>
             )}
           </CardContent>
