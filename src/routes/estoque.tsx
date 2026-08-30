@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, shortDate } from "@/lib/format";
+import { runOrQueue, usePendingQueue, type AdjustStockPayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/estoque")({
   head: () => ({
@@ -50,7 +51,7 @@ function InventoryPage() {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
-    const products = useQuery({
+  const products = useQuery({
     queryKey: ["products", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -74,19 +75,28 @@ function InventoryPage() {
     },
   });
 
+  const pendingMoves = usePendingQueue("adjust_stock");
+
   const move = useMutation({
     mutationFn: async () => {
       const sign = MOVE_TYPES.find((m) => m.value === type)?.sign ?? 1;
-      const { error } = await supabase.rpc("adjust_stock", {
+      const payload: AdjustStockPayload = {
         p_product_id: productId,
         p_quantity: sign * (Number(amount) || 0),
         p_type: type,
         p_reason: reason,
+      };
+      return runOrQueue("adjust_stock", payload, "Movimento de estoque", async () => {
+        const { error } = await supabase.rpc("adjust_stock", payload as any);
+        if (error) throw error;
       });
-      if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("Movimento registado");
+    onSuccess: (res) => {
+      toast.success(
+        res.offline
+          ? "Sem ligação — movimento guardado neste aparelho. Toque em \"Sincronizar\" quando voltar online."
+          : "Movimento registado",
+      );
       setOpen(false);
       setAmount("");
       setReason("");
@@ -160,6 +170,26 @@ function InventoryPage() {
               <CardTitle className="text-base">Movimentos recentes</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              {pendingMoves.map((m) => {
+                const prod = list.find((p) => p.id === m.payload.p_product_id);
+                return (
+                  <div key={m.localId} className="flex items-start gap-2 opacity-70">
+                    {m.payload.p_quantity >= 0 ? (
+                      <ArrowUpCircle className="mt-0.5 size-4 text-success" />
+                    ) : (
+                      <ArrowDownCircle className="mt-0.5 size-4 text-destructive" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">
+                        {prod?.name ?? "Produto"} · {qty(m.payload.p_quantity)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {m.payload.p_reason || m.payload.p_type} · Por sincronizar
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
               {(movements.data ?? []).map((m) => (
                 <div key={m.id} className="flex items-start gap-2">
                   {Number(m.quantity) >= 0 ? (
@@ -177,7 +207,7 @@ function InventoryPage() {
                   </div>
                 </div>
               ))}
-              {(movements.data ?? []).length === 0 && (
+              {pendingMoves.length === 0 && (movements.data ?? []).length === 0 && (
                 <p className="text-muted-foreground">Sem movimentos.</p>
               )}
             </CardContent>
