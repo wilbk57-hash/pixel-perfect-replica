@@ -138,16 +138,20 @@ function PosPage() {
             {filtered.map((p) => (
               <button key={p.id} onClick={() => add(p)} className="text-left">
                 <Card className="h-full overflow-hidden transition-shadow hover:shadow-[var(--shadow-lift)]">
-                  {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} className="h-24 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-24 w-full items-center justify-center bg-muted text-muted-foreground">
-                      <ShoppingCart className="size-6" />
+                  <div className="relative aspect-square w-full overflow-hidden bg-muted">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <ShoppingCart className="size-6" />
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2 pt-8">
+                      <p className="truncate text-sm font-semibold text-white drop-shadow-sm">{p.name}</p>
                     </div>
-                  )}
+                  </div>
                   <CardContent className="pt-3">
-                    <p className="truncate font-medium">{p.name}</p>
-                    <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                       <span className="font-bold">{money(Number(p.sale_price))}</span>
                       <Badge variant={Number(p.current_stock) <= 0 ? "destructive" : "secondary"}>
                         {qty(Number(p.current_stock))} {p.unit}
