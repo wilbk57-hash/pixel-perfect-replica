@@ -122,7 +122,8 @@ function CustomersPage() {
           const { error } = await supabase.from("customers").update(rest).eq("id", id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from("customers").insert(payload);
+          const { id: _omit, ...insertData } = payload;
+          const { error } = await supabase.from("customers").insert(insertData);
           if (error) throw error;
         }
       });
