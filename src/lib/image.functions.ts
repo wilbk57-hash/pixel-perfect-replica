@@ -71,8 +71,11 @@ export const generateProductImage = createServerFn({ method: "POST" })
       .upload(path, bytes, { contentType: "image/png", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
-    const { data: publicUrlData } = supabase.storage.from("product-images").getPublicUrl(path);
-    const publicUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+    const { data: signed, error: signError } = await supabase.storage
+      .from("product-images")
+      .createSignedUrl(path, 60 * 60 * 24 * 365 * 5);
+    if (signError || !signed?.signedUrl) throw new Error(signError?.message ?? "Falha ao obter a imagem.");
+    const publicUrl = `${signed.signedUrl}&v=${Date.now()}`;
 
     const { error: updateError } = await supabase
       .from("products")
