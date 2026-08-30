@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendDebtReminder } from "@/lib/whatsapp.functions";
 import { money, shortDate, PAYMENT_METHODS } from "@/lib/format";
-
+import { runOrQueue, usePendingQueue, type PayDebtPayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/dividas")({
   head: () => ({
@@ -66,18 +66,27 @@ function DebtsPage() {
     },
   });
 
+  const pendingPayments = usePendingQueue("pay_debt");
+
   const pay = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("pay_debt", {
+      const payload: PayDebtPayload = {
         p_debt_id: debtId!,
         p_amount: Number(amount) || 0,
         p_method: method,
         p_notes: "",
+      };
+      return runOrQueue("pay_debt", payload, "Recebimento", async () => {
+        const { error } = await supabase.rpc("pay_debt", payload as any);
+        if (error) throw error;
       });
-      if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("Pagamento registado");
+    onSuccess: (res) => {
+      toast.success(
+        res.offline
+          ? "Sem ligação — recebimento guardado neste aparelho. Toque em \"Sincronizar\" quando voltar online."
+          : "Pagamento registado",
+      );
       setDebtId(null);
       setAmount("");
       qc.invalidateQueries();
@@ -111,54 +120,61 @@ function DebtsPage() {
   const totalOpen = open.reduce((a, d) => a + Number(d.remaining_amount), 0);
   const current = (debts.data ?? []).find((d) => d.id === debtId);
 
-
   return (
     <AppShell title="Dívidas" subtitle={`${open.length} em aberto · ${money(totalOpen)} por receber`}>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
-          {(debts.data ?? []).map((d) => (
-            <Card key={d.id}>
-              <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
-                <div className="min-w-0">
-                  <p className="font-semibold">{d.customer_name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {d.sale_number || "Manual"} · {shortDate(d.created_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={d.status === "PAID" ? "secondary" : "destructive"}>
-                    {d.status === "PAID" ? "Pago" : d.status === "PARTIAL" ? "Parcial" : "Pendente"}
-                  </Badge>
-                  <div className="text-right">
-                    <p className="font-bold">{money(Number(d.remaining_amount))}</p>
-                    <p className="text-xs text-muted-foreground">de {money(Number(d.original_amount))}</p>
+          {(debts.data ?? []).map((d) => {
+            const hasPendingPayment = pendingPayments.some((p) => p.payload.p_debt_id === d.id);
+            return (
+              <Card key={d.id}>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{d.customer_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {d.sale_number || "Manual"} · {shortDate(d.created_at)}
+                    </p>
                   </div>
-                  {d.status !== "PAID" && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => remind.mutate(d.id)}
-                        disabled={remindingId === d.id}
-                      >
-                        <MessageCircle className="size-4" />
-                        {remindingId === d.id ? "A enviar…" : "Lembrar"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setDebtId(d.id);
-                          setAmount(String(d.remaining_amount));
-                        }}
-                      >
-                        Receber
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex items-center gap-3">
+                    {hasPendingPayment && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Pagamento por sincronizar
+                      </Badge>
+                    )}
+                    <Badge variant={d.status === "PAID" ? "secondary" : "destructive"}>
+                      {d.status === "PAID" ? "Pago" : d.status === "PARTIAL" ? "Parcial" : "Pendente"}
+                    </Badge>
+                    <div className="text-right">
+                      <p className="font-bold">{money(Number(d.remaining_amount))}</p>
+                      <p className="text-xs text-muted-foreground">de {money(Number(d.original_amount))}</p>
+                    </div>
+                    {d.status !== "PAID" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => remind.mutate(d.id)}
+                          disabled={remindingId === d.id}
+                        >
+                          <MessageCircle className="size-4" />
+                          {remindingId === d.id ? "A enviar…" : "Lembrar"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setDebtId(d.id);
+                            setAmount(String(d.remaining_amount));
+                          }}
+                        >
+                          Receber
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
           {(debts.data ?? []).length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhuma dívida registada.</p>
           )}
@@ -167,6 +183,18 @@ function DebtsPage() {
         <Card className="h-fit">
           <CardContent className="space-y-3 pt-6">
             <p className="font-semibold">Últimos recebimentos</p>
+            {pendingPayments.map((p) => {
+              const debt = (debts.data ?? []).find((d) => d.id === p.payload.p_debt_id);
+              return (
+                <div key={p.localId} className="flex items-start justify-between text-sm opacity-70">
+                  <div className="min-w-0">
+                    <p className="truncate">{debt?.customer_name ?? "Cliente"}</p>
+                    <p className="text-xs text-muted-foreground">Por sincronizar</p>
+                  </div>
+                  <span className="font-medium text-success">{money(p.payload.p_amount)}</span>
+                </div>
+              );
+            })}
             {(payments.data ?? []).map((p) => (
               <div key={p.id} className="flex items-start justify-between text-sm">
                 <div className="min-w-0">
@@ -176,7 +204,7 @@ function DebtsPage() {
                 <span className="font-medium text-success">{money(Number(p.amount))}</span>
               </div>
             ))}
-            {(payments.data ?? []).length === 0 && (
+            {pendingPayments.length === 0 && (payments.data ?? []).length === 0 && (
               <p className="text-sm text-muted-foreground">Sem recebimentos.</p>
             )}
           </CardContent>
