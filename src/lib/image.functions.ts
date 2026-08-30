@@ -34,16 +34,18 @@ export const generateProductImage = createServerFn({ method: "POST" })
 
     const prompt = buildPrompt(data.name, data.description);
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
+        model: "openai/gpt-image-2",
+        prompt,
+        size: "1024x1024",
+        quality: "low",
+        n: 1,
       }),
     });
 
@@ -54,13 +56,10 @@ export const generateProductImage = createServerFn({ method: "POST" })
       throw new Error(`Falha ao gerar imagem: ${aiRes.status} ${errText.slice(0, 200)}`);
     }
 
-    const aiJson = (await aiRes.json()) as {
-      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
-    };
-    const dataUrl = aiJson.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!dataUrl) throw new Error("A IA não devolveu nenhuma imagem.");
+    const aiJson = (await aiRes.json()) as { data?: Array<{ b64_json?: string }> };
+    const base64 = aiJson.data?.[0]?.b64_json;
+    if (!base64) throw new Error("A IA não devolveu nenhuma imagem.");
 
-    const base64 = dataUrl.split(",")[1] ?? "";
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
