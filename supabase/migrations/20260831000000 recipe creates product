@@ -1,0 +1,116 @@
+-- ============================================================
+-- 1) Custo unitário editável por ingrediente da receita
+--    (antes o custo do ingrediente vinha sempre do cost_price
+--    atual do produto; agora o dono pode ajustar por receita)
+-- ============================================================
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS unit_cost NUMERIC NOT NULL DEFAULT 0;
+
+-- Preenche o custo dos ingredientes já existentes com o custo atual do produto,
+-- para não ficarem a zero nas receitas criadas antes desta alteração.
+UPDATE public.recipe_ingredients ri
+SET unit_cost = p.cost_price
+FROM public.products p
+WHERE ri.product_id = p.id AND ri.unit_cost = 0;
+
+-- ============================================================
+-- 2) Nova versão do save_recipe: cria ou atualiza o PRODUTO final
+--    diretamente a partir do formulário de Produção (nome, categoria,
+--    unidade, preço de venda) e grava o custo por unidade calculado
+--    (soma dos custos dos ingredientes + custo adicional) / quantidade produzida.
+-- ============================================================
+DROP FUNCTION IF EXISTS public.save_recipe(UUID, TEXT, UUID, NUMERIC, NUMERIC, JSONB);
+
+CREATE OR REPLACE FUNCTION public.save_recipe(
+  p_recipe_id UUID,
+  p_name TEXT,
+  p_product_id UUID,
+  p_product_name TEXT,
+  p_category_id UUID,
+  p_unit TEXT,
+  p_sale_price NUMERIC,
+  p_yield_quantity NUMERIC,
+  p_additional_cost NUMERIC,
+  p_ingredients JSONB
+) RETURNS UUID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user UUID;
+  v_recipe_id UUID;
+  v_product_id UUID;
+  v_ing JSONB;
+  v_ing_cost NUMERIC := 0;
+  v_unit_cost NUMERIC := 0;
+  v_yield NUMERIC;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
+  v_user := public.effective_owner_id();
+
+  IF p_product_name IS NULL OR btrim(p_product_name) = '' THEN
+    RAISE EXCEPTION 'Indique o nome do produto';
+  END IF;
+
+  IF p_category_id IS NOT NULL THEN
+    PERFORM 1 FROM categories WHERE id = p_category_id AND user_id = v_user;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Categoria inválida'; END IF;
+  END IF;
+
+  v_yield := GREATEST(COALESCE(p_yield_quantity, 1), 0.0001);
+
+  -- Custo total = soma (quantidade x custo unitário editável de cada ingrediente) + custo adicional
+  IF p_ingredients IS NOT NULL THEN
+    FOR v_ing IN SELECT * FROM jsonb_array_elements(p_ingredients) LOOP
+      v_ing_cost := v_ing_cost + COALESCE((v_ing->>'quantity')::numeric, 0) * COALESCE((v_ing->>'unit_cost')::numeric, 0);
+    END LOOP;
+  END IF;
+  v_unit_cost := (v_ing_cost + COALESCE(p_additional_cost, 0)) / v_yield;
+
+  -- Garante o produto final: atualiza se já existir, cria se não existir
+  IF p_product_id IS NOT NULL THEN
+    UPDATE products SET
+      name = p_product_name,
+      category_id = p_category_id,
+      unit = COALESCE(p_unit, unit),
+      sale_price = COALESCE(p_sale_price, sale_price),
+      cost_price = v_unit_cost
+    WHERE id = p_product_id AND user_id = v_user
+    RETURNING id INTO v_product_id;
+    IF v_product_id IS NULL THEN RAISE EXCEPTION 'Produto final inválido'; END IF;
+  ELSE
+    INSERT INTO products (user_id, category_id, name, unit, sale_price, cost_price, current_stock, min_stock, sku, product_type)
+    VALUES (v_user, p_category_id, p_product_name, COALESCE(p_unit, 'UN'), COALESCE(p_sale_price, 0), v_unit_cost, 0, 0, '', 'FINISHED')
+    RETURNING id INTO v_product_id;
+  END IF;
+
+  -- Cria ou atualiza a receita, já ligada ao produto acima
+  IF p_recipe_id IS NOT NULL THEN
+    UPDATE recipes SET
+      name = p_name,
+      product_id = v_product_id,
+      product_name = p_product_name,
+      yield_quantity = v_yield,
+      yield_unit = COALESCE(p_unit, 'UN'),
+      additional_cost = COALESCE(p_additional_cost, 0)
+    WHERE id = p_recipe_id AND user_id = v_user
+    RETURNING id INTO v_recipe_id;
+    IF v_recipe_id IS NULL THEN RAISE EXCEPTION 'Receita não encontrada'; END IF;
+    DELETE FROM recipe_ingredients WHERE recipe_id = v_recipe_id AND user_id = v_user;
+  ELSE
+    INSERT INTO recipes (user_id, name, product_id, product_name, yield_quantity, yield_unit, additional_cost)
+    VALUES (v_user, p_name, v_product_id, p_product_name, v_yield, COALESCE(p_unit, 'UN'), COALESCE(p_additional_cost, 0))
+    RETURNING id INTO v_recipe_id;
+  END IF;
+
+  IF p_ingredients IS NOT NULL THEN
+    FOR v_ing IN SELECT * FROM jsonb_array_elements(p_ingredients) LOOP
+      INSERT INTO recipe_ingredients (user_id, recipe_id, product_id, product_name, quantity, unit, unit_cost)
+      SELECT v_user, v_recipe_id, p.id, p.name, (v_ing->>'quantity')::numeric, p.unit, COALESCE((v_ing->>'unit_cost')::numeric, p.cost_price)
+      FROM products p
+      WHERE p.id = (v_ing->>'product_id')::uuid AND p.user_id = v_user;
+    END LOOP;
+  END IF;
+
+  RETURN v_recipe_id;
+END; $$;
+
+REVOKE ALL ON FUNCTION public.save_recipe(UUID, TEXT, UUID, TEXT, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.save_recipe(UUID, TEXT, UUID, TEXT, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, JSONB) TO authenticated;
