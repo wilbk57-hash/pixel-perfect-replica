@@ -73,6 +73,9 @@ function ProductsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [catName, setCatName] = useState("");
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [imageTarget, setImageTarget] = useState<{ id: string; name: string; description: string } | null>(null);
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [packaging, setPackaging] = useState("auto");
   const generateImage = useServerFn(generateProductImage);
 
   const products = useQuery({
@@ -143,15 +146,30 @@ function ProductsPage() {
   });
 
   const generateProductPhoto = useMutation({
-    mutationFn: async (p: { id: string; name: string; description: string }) => {
+    mutationFn: async (p: {
+      id: string;
+      name: string;
+      description: string;
+      customInstructions: string;
+      packaging: string;
+    }) => {
       setGeneratingId(p.id);
       return await generateImage({
-        data: { productId: p.id, name: p.name, description: p.description },
+        data: {
+          productId: p.id,
+          name: p.name,
+          description: p.description,
+          customInstructions: p.customInstructions,
+          packaging: p.packaging,
+        },
       });
     },
     onSettled: () => setGeneratingId(null),
     onSuccess: () => {
       toast.success("Imagem gerada com sucesso");
+      setImageTarget(null);
+      setCustomInstructions("");
+      setPackaging("auto");
       qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -163,7 +181,7 @@ function ProductsPage() {
   const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
 
   return (
-        <AppShell
+    <AppShell
       title="Produtos"
       subtitle="Catálogo, preços e matérias-primas"
       adminOnly
@@ -344,9 +362,11 @@ function ProductsPage() {
                 size="sm"
                 className="absolute right-2 top-2 shadow"
                 disabled={generatingId === p.id}
-                onClick={() =>
-                  generateProductPhoto.mutate({ id: p.id, name: p.name, description: p.description })
-                }
+                onClick={() => {
+                  setImageTarget({ id: p.id, name: p.name, description: p.description ?? "" });
+                  setCustomInstructions("");
+                  setPackaging("auto");
+                }}
               >
                 <Sparkles className="size-4" />
                 {generatingId === p.id
@@ -397,6 +417,73 @@ function ProductsPage() {
           <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
         )}
       </div>
+
+      <Dialog
+        open={!!imageTarget}
+        onOpenChange={(v) => {
+          if (!v) {
+            setImageTarget(null);
+            setCustomInstructions("");
+            setPackaging("auto");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gerar imagem de {imageTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Formato da embalagem</Label>
+              <Select value={packaging} onValueChange={setPackaging}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automático (a IA escolhe)</SelectItem>
+                  <SelectItem value="glass_bottle">Garrafa de vidro</SelectItem>
+                  <SelectItem value="plastic_bottle">Garrafa de plástico</SelectItem>
+                  <SelectItem value="can">Lata</SelectItem>
+                  <SelectItem value="jar">Frasco / jarra</SelectItem>
+                  <SelectItem value="box">Caixa / embalagem</SelectItem>
+                  <SelectItem value="none">Sem embalagem (só o ingrediente)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Instruções extra (opcional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Descreva mais detalhes — por exemplo "numa mesa de madeira rústica", "fundo azul", "sem
+                tampa". Se deixar em branco, a IA completa o resto automaticamente.
+              </p>
+              <Textarea
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                placeholder="Ex: fundo de madeira escura, luz quente…"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() =>
+                imageTarget &&
+                generateProductPhoto.mutate({
+                  id: imageTarget.id,
+                  name: imageTarget.name,
+                  description: imageTarget.description,
+                  customInstructions,
+                  packaging: packaging === "auto" ? "" : packaging,
+                })
+              }
+              disabled={generateProductPhoto.isPending}
+            >
+              <Sparkles className="size-4" />
+              {generateProductPhoto.isPending ? "A gerar…" : "Gerar imagem"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
