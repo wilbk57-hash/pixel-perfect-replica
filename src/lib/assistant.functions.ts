@@ -149,8 +149,13 @@ export const askAssistant = createServerFn({ method: "POST" })
     const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("Assistente indisponível: chave de IA em falta.");
 
-    const { data: isOwner } = await supabase.rpc("has_role", { _user_id: userId, _role: "dono" });
-    const canEdit = isOwner === true;
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "dono")
+      .maybeSingle();
+    const canEdit = roleRow != null;
 
     async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
       if (WRITE_TOOLS.has(name) && !canEdit) {
