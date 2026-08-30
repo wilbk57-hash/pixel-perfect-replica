@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Phone } from "lucide-react";
+import { Plus, Pencil, Phone, History } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { money } from "@/lib/format";
+import { money, shortDate } from "@/lib/format";
 import { runOrQueue, usePendingQueue, type CustomerUpsertPayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/clientes")({
@@ -53,12 +53,28 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [search, setSearch] = useState("");
+  const [historyFor, setHistoryFor] = useState<{ id: string; name: string } | null>(null);
 
   const customers = useQuery({
     queryKey: ["customers-full", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase.from("customers").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const history = useQuery({
+    queryKey: ["customer-history", historyFor?.id],
+    enabled: !!historyFor,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("id, sale_number, final_total, paid_amount, remaining_debt, payment_status, created_at")
+        .eq("customer_id", historyFor!.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
       if (error) throw error;
       return data;
     },
@@ -126,6 +142,11 @@ function CustomersPage() {
 
   const list = mergedCustomers.filter((c) =>
     `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const histTotals = (history.data ?? []).reduce(
+    (a, s) => ({ paid: a.paid + Number(s.paid_amount), owed: a.owed + Number(s.remaining_debt) }),
+    { paid: 0, owed: 0 },
   );
 
   return (
@@ -215,24 +236,34 @@ function CustomersPage() {
                     </p>
                   ) : null}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setDraft({
-                      id: c.id,
-                      name: c.name,
-                      phone: c.phone,
-                      email: c.email,
-                      address: c.address,
-                      notes: c.notes,
-                      credit_limit: String(c.credit_limit),
-                    });
-                    setOpen(true);
-                  }}
-                >
-                  <Pencil className="size-4" />
-                </Button>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={c._pending}
+                    onClick={() => setHistoryFor({ id: c.id, name: c.name })}
+                  >
+                    <History className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setDraft({
+                        id: c.id,
+                        name: c.name,
+                        phone: c.phone,
+                        email: c.email,
+                        address: c.address,
+                        notes: c.notes,
+                        credit_limit: String(c.credit_limit),
+                      });
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
               </div>
               <div className="mt-4 flex items-end justify-between">
                 <div>
@@ -248,6 +279,51 @@ function CustomersPage() {
         ))}
         {list.length === 0 && <p className="text-sm text-muted-foreground">Nenhum cliente encontrado.</p>}
       </div>
+
+      <Dialog open={!!historyFor} onOpenChange={(v) => !v && setHistoryFor(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Histórico de {historyFor?.name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex gap-3 rounded-lg border p-3 text-sm">
+            <div className="flex-1">
+              <p className="text-muted-foreground">Total pago</p>
+              <p className="font-bold text-success">{money(histTotals.paid)}</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-muted-foreground">Total em dívida</p>
+              <p className="font-bold text-destructive">{money(histTotals.owed)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {(history.data ?? []).map((s) => (
+              <div key={s.id} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{s.sale_number}</p>
+                    <p className="text-xs text-muted-foreground">{shortDate(s.created_at)}</p>
+                  </div>
+                  <Badge variant={s.payment_status === "PAID" ? "secondary" : "destructive"}>
+                    {s.payment_status === "PAID" ? "Pago" : s.payment_status === "PARTIAL" ? "Parcial" : "Fiado"}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total {money(Number(s.final_total))}</span>
+                  <span className="text-success">pago {money(Number(s.paid_amount))}</span>
+                  {Number(s.remaining_debt) > 0 && (
+                    <span className="font-medium text-destructive">deve {money(Number(s.remaining_debt))}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {(history.data ?? []).length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">Ainda sem compras registadas.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
