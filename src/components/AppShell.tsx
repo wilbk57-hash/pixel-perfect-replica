@@ -172,11 +172,11 @@ export function AppShell({
     <div className="flex min-h-screen bg-background">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 shrink-0 border-r bg-sidebar p-4 transition-transform lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r bg-sidebar p-4 transition-transform lg:static lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="mb-8 flex items-center gap-2 px-2">
+        <div className="mb-6 flex shrink-0 items-center gap-2 px-2">
           <span className="gradient-fresh flex size-9 items-center justify-center rounded-xl text-primary-foreground">
             <Leaf className="size-5" />
           </span>
@@ -186,7 +186,7 @@ export function AppShell({
           </div>
         </div>
 
-        <nav className="space-y-1">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
           {items.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
@@ -204,13 +204,13 @@ export function AppShell({
           ))}
         </nav>
 
-        <div className="absolute inset-x-4 bottom-4 space-y-2">
-          <div className="mb-2 flex items-center gap-2 px-3">
+        <div className="mt-4 shrink-0 space-y-2 border-t pt-4">
+          <div className="mb-2 flex items-center gap-2 px-1">
             <Badge variant={isAdmin ? "default" : "secondary"} className="text-[10px]">
               {isAdmin ? "Dono" : "Funcionário"}
             </Badge>
           </div>
-          <p className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</p>
+          <p className="mb-2 truncate px-1 text-xs text-muted-foreground">{user.email}</p>
           {isAdmin ? <TeamDialog /> : null}
           <Button variant="outline" className="w-full justify-start gap-2" onClick={() => signOut()}>
             <LogOut className="size-4" />
