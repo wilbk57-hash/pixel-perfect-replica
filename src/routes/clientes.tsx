@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Pencil, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { money } from "@/lib/format";
+import { runOrQueue, usePendingQueue, type CustomerUpsertPayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({
@@ -63,9 +64,34 @@ function CustomersPage() {
     },
   });
 
+  const pendingCustomers = usePendingQueue("customer_upsert");
+
+  const mergedCustomers = useMemo(() => {
+    const base = customers.data ?? [];
+    const byId = new Map(base.map((c) => [c.id, { ...c, _pending: false } as any]));
+    const extra: any[] = [];
+    for (const item of pendingCustomers) {
+      const payload = item.payload;
+      if (payload.id && byId.has(payload.id)) {
+        byId.set(payload.id, { ...byId.get(payload.id), ...payload, _pending: true });
+      } else if (!payload.id) {
+        extra.push({
+          ...payload,
+          id: item.localId,
+          total_spent: 0,
+          current_debt: 0,
+          is_active: true,
+          _pending: true,
+        });
+      }
+    }
+    return [...Array.from(byId.values()), ...extra];
+  }, [customers.data, pendingCustomers]);
+
   const save = useMutation({
     mutationFn: async (d: Draft) => {
-      const payload = {
+      const payload: CustomerUpsertPayload = {
+        id: d.id,
         user_id: user!.id,
         name: d.name,
         phone: d.phone,
@@ -74,16 +100,23 @@ function CustomersPage() {
         notes: d.notes,
         credit_limit: Number(d.credit_limit) || 0,
       };
-      if (d.id) {
-        const { error } = await supabase.from("customers").update(payload).eq("id", d.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("customers").insert(payload);
-        if (error) throw error;
-      }
+      return runOrQueue("customer_upsert", payload, d.id ? "Edição de cliente" : "Novo cliente", async () => {
+        if (payload.id) {
+          const { id, ...rest } = payload;
+          const { error } = await supabase.from("customers").update(rest).eq("id", id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("customers").insert(payload);
+          if (error) throw error;
+        }
+      });
     },
-    onSuccess: () => {
-      toast.success("Cliente guardado");
+    onSuccess: (res) => {
+      toast.success(
+        res.offline
+          ? "Sem ligação — cliente guardado neste aparelho. Toque em \"Sincronizar\" quando voltar online."
+          : "Cliente guardado",
+      );
       setOpen(false);
       setDraft(EMPTY);
       qc.invalidateQueries();
@@ -91,7 +124,7 @@ function CustomersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const list = (customers.data ?? []).filter((c) =>
+  const list = mergedCustomers.filter((c) =>
     `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -168,7 +201,14 @@ function CustomersPage() {
             <CardContent className="pt-6">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-semibold">{c.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate font-semibold">{c.name}</p>
+                    {c._pending && (
+                      <Badge variant="outline" className="shrink-0 text-[10px]">
+                        Por sincronizar
+                      </Badge>
+                    )}
+                  </div>
                   {c.phone ? (
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Phone className="size-3" /> {c.phone}
