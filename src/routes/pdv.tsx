@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, PAYMENT_METHODS } from "@/lib/format";
-import { addToQueue, type QueuedSaleArgs } from "@/lib/offline-queue";
+import { runOrQueue, type SalePayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/pdv")({
   head: () => ({
@@ -75,7 +75,7 @@ function PosPage() {
         throw new Error("Selecione um cliente para registar a venda a crédito.");
       }
 
-      const args: QueuedSaleArgs = {
+      const payload: SalePayload = {
         p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
         ...(customerId === "none" ? {} : { p_customer_id: customerId }),
         p_discount: Number(discount) || 0,
@@ -84,23 +84,10 @@ function PosPage() {
         p_notes: "",
       };
 
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        addToQueue(args);
-        return { offline: true };
-      }
-
-      const { error } = await supabase.rpc("create_sale", args as any);
-      if (error) {
-        const msg = (error.message || "").toLowerCase();
-        const looksOffline =
-          msg.includes("fetch") || msg.includes("network") || (typeof navigator !== "undefined" && !navigator.onLine);
-        if (looksOffline) {
-          addToQueue(args);
-          return { offline: true };
-        }
-        throw error;
-      }
-      return { offline: false };
+      return runOrQueue("sale", payload, "Venda", async () => {
+        const { error } = await supabase.rpc("create_sale", payload as any);
+        if (error) throw error;
+      });
     },
     onSuccess: (res) => {
       if (res.offline) {
