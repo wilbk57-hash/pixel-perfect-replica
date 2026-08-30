@@ -22,7 +22,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, UNITS, PRODUCT_TYPES } from "@/lib/format";
 import {
   runOrQueue,
@@ -69,6 +68,11 @@ const EMPTY: Draft = {
   min_stock: "0",
   sku: "",
 };
+
+const selectClass =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
 
 function ProductsPage() {
   const { user } = useAuth();
@@ -272,52 +276,48 @@ function ProductsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Categoria</Label>
-                  <Select
+                  <select
                     value={draft.category_id ?? "none"}
-                    onValueChange={(v) => setDraft({ ...draft, category_id: v === "none" ? null : v })}
+                    onChange={(e) =>
+                      setDraft({ ...draft, category_id: e.target.value === "none" ? null : e.target.value })
+                    }
+                    className={selectClass}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem categoria</SelectItem>
-                      {categories.data?.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="none">Sem categoria</option>
+                    {categories.data?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo</Label>
-                  <Select value={draft.product_type} onValueChange={(v) => setDraft({ ...draft, product_type: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PRODUCT_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    value={draft.product_type}
+                    onChange={(e) => setDraft({ ...draft, product_type: e.target.value })}
+                    className={selectClass}
+                  >
+                    {PRODUCT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Unidade</Label>
-                  <Select value={draft.unit} onValueChange={(v) => setDraft({ ...draft, unit: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UNITS.map((u) => (
-                        <SelectItem key={u} value={u}>
-                          {u}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    value={draft.unit}
+                    onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+                    className={selectClass}
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Código / SKU</Label>
@@ -480,20 +480,15 @@ function ProductsPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Formato da embalagem</Label>
-              <Select value={packaging} onValueChange={setPackaging}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Automático (a IA escolhe)</SelectItem>
-                  <SelectItem value="glass_bottle">Garrafa de vidro</SelectItem>
-                  <SelectItem value="plastic_bottle">Garrafa de plástico</SelectItem>
-                  <SelectItem value="can">Lata</SelectItem>
-                  <SelectItem value="jar">Frasco / jarra</SelectItem>
-                  <SelectItem value="box">Caixa / embalagem</SelectItem>
-                  <SelectItem value="none">Sem embalagem (só o ingrediente)</SelectItem>
-                </SelectContent>
-              </Select>
+              <select value={packaging} onChange={(e) => setPackaging(e.target.value)} className={selectClass}>
+                <option value="auto">Automático (a IA escolhe)</option>
+                <option value="glass_bottle">Garrafa de vidro</option>
+                <option value="plastic_bottle">Garrafa de plástico</option>
+                <option value="can">Lata</option>
+                <option value="jar">Frasco / jarra</option>
+                <option value="box">Caixa / embalagem</option>
+                <option value="none">Sem embalagem (só o ingrediente)</option>
+              </select>
             </div>
             <div className="space-y-2">
               <Label>Instruções extra (opcional)</Label>
