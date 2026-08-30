@@ -35,25 +35,22 @@ export const Route = createFileRoute("/producao")({
   component: ProductionPage,
 });
 
-type Ingredient = { product_id: string; quantity: string; cost: string };
-const EMPTY_INGREDIENT: Ingredient = { product_id: "", quantity: "", cost: "" };
-
-const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
-  "disabled:cursor-not-allowed disabled:opacity-50";
+type Ingredient = { product_id: string; quantity: string; unit_cost: string };
+const EMPTY_INGREDIENT: Ingredient = { product_id: "", quantity: "", unit_cost: "" };
 
 function ProductionPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [linkMode, setLinkMode] = useState<"new" | "existing">("new");
-  const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+
+  // Dados do produto final (a receita CRIA/ATUALIZA este produto diretamente)
+  const [productId, setProductId] = useState<string | null>(null);
+  const [productName, setProductName] = useState("");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [unit, setUnit] = useState("UN");
   const [salePrice, setSalePrice] = useState("0");
-  const [outputId, setOutputId] = useState("");
+
   const [outputQty, setOutputQty] = useState("1");
   const [additionalCost, setAdditionalCost] = useState("0");
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ ...EMPTY_INGREDIENT }]);
@@ -86,7 +83,7 @@ function ProductionPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("recipes")
-        .select("*, recipe_ingredients(*)")
+        .select("*, recipe_ingredients(*), product:products(id, name, category_id, unit, sale_price, cost_price)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -107,16 +104,13 @@ function ProductionPage() {
     },
   });
 
-  const pendingRuns = usePendingQueue("produce_recipe");
-
   function resetForm() {
     setEditingId(null);
-    setLinkMode("new");
-    setName("");
-    setCategoryId("");
+    setProductId(null);
+    setProductName("");
+    setCategoryId(null);
     setUnit("UN");
     setSalePrice("0");
-    setOutputId("");
     setOutputQty("1");
     setAdditionalCost("0");
     setIngredients([{ ...EMPTY_INGREDIENT }]);
@@ -124,13 +118,11 @@ function ProductionPage() {
 
   function openEdit(r: any) {
     setEditingId(r.id);
-    setLinkMode(r.product_id ? "existing" : "new");
-    setName(r.name);
-    setOutputId(r.product_id ?? "");
-    const prod = (products.data ?? []).find((p) => p.id === r.product_id);
-    setCategoryId(prod?.category_id ?? "");
-    setUnit(r.yield_unit || prod?.unit || "UN");
-    setSalePrice(String(prod?.sale_price ?? 0));
+    setProductId(r.product_id ?? null);
+    setProductName(r.product?.name ?? r.product_name ?? "");
+    setCategoryId(r.product?.category_id ?? null);
+    setUnit(r.product?.unit ?? r.yield_unit ?? "UN");
+    setSalePrice(String(r.product?.sale_price ?? 0));
     setOutputQty(String(r.yield_quantity));
     setAdditionalCost(String(r.additional_cost ?? 0));
     setIngredients(
@@ -138,35 +130,16 @@ function ProductionPage() {
         ? r.recipe_ingredients.map((i: any) => ({
             product_id: i.product_id,
             quantity: String(i.quantity),
-            cost: String((products.data ?? []).find((p) => p.id === i.product_id)?.cost_price ?? 0),
+            unit_cost: String(i.unit_cost ?? 0),
           }))
         : [{ ...EMPTY_INGREDIENT }],
     );
     setOpen(true);
   }
 
-  function pickIngredient(idx: number, productId: string) {
-    const prod = (products.data ?? []).find((p) => p.id === productId);
-    setIngredients(
-      ingredients.map((x, i) =>
-        i === idx ? { ...x, product_id: productId, cost: String(prod?.cost_price ?? 0) } : x,
-      ),
-    );
-  }
-
-  function pickExistingProduct(productId: string) {
-    setOutputId(productId);
-    const prod = (products.data ?? []).find((p) => p.id === productId);
-    if (prod) {
-      setName(prod.name);
-      setCategoryId(prod.category_id ?? "");
-      setUnit(prod.unit || "UN");
-      setSalePrice(String(prod.sale_price ?? 0));
-    }
-  }
-
+  // Custo ao vivo: soma (quantidade x custo unitário editável) + custo adicional, dividido pela quantidade produzida
   const ingredientsCost = ingredients.reduce(
-    (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.cost) || 0),
+    (a, i) => a + (Number(i.quantity) || 0) * (Number(i.unit_cost) || 0),
     0,
   );
   const totalCost = ingredientsCost + (Number(additionalCost) || 0);
@@ -174,24 +147,19 @@ function ProductionPage() {
 
   const saveRecipe = useMutation({
     mutationFn: async () => {
-      const valid = ingredients.filter((i) => i.product_id && Number(i.quantity) > 0);
-      for (const i of valid) {
-        const prod = (products.data ?? []).find((p) => p.id === i.product_id);
-        const newCost = Number(i.cost) || 0;
-        if (prod && Number(prod.cost_price) !== newCost) {
-          const { error } = await supabase
-            .from("products")
-            .update({ cost_price: newCost })
-            .eq("id", i.product_id);
-          if (error) throw error;
-        }
-      }
-      const rows = valid.map((i) => ({ product_id: i.product_id, quantity: Number(i.quantity) }));
+      const rows = ingredients
+        .filter((i) => i.product_id && Number(i.quantity) > 0)
+        .map((i) => ({
+          product_id: i.product_id,
+          quantity: Number(i.quantity),
+          unit_cost: Number(i.unit_cost) || 0,
+        }));
       const { error } = await supabase.rpc("save_recipe", {
-        p_recipe_id: editingId as unknown as string,
-        p_name: name,
-        p_product_id: (linkMode === "existing" && outputId ? outputId : null) as unknown as string,
-        p_category_id: (categoryId || null) as unknown as string,
+        p_recipe_id: editingId,
+        p_name: productName.trim(),
+        p_product_id: productId,
+        p_product_name: productName.trim(),
+        p_category_id: categoryId,
         p_unit: unit,
         p_sale_price: Number(salePrice) || 0,
         p_yield_quantity: Number(outputQty) || 1,
@@ -201,13 +169,15 @@ function ProductionPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(editingId ? "Receita atualizada" : "Receita criada");
+      toast.success(editingId ? "Produto e receita atualizados" : "Produto criado e receita guardada");
       setOpen(false);
       resetForm();
       qc.invalidateQueries();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const pendingProductions = usePendingQueue("produce_recipe");
 
   const produce = useMutation({
     mutationFn: async () => {
@@ -252,148 +222,122 @@ function ProductionPage() {
           </DialogTrigger>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingId ? "Editar receita" : "Nova receita"}</DialogTitle>
+              <DialogTitle>{editingId ? "Editar produto / receita" : "Novo produto por receita"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={linkMode === "new" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setLinkMode("new")}
-                >
-                  Criar novo produto
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={linkMode === "existing" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setLinkMode("existing")}
-                >
-                  Ligar a produto existente
-                </Button>
+              <div className="space-y-2">
+                <Label>Nome do produto</Label>
+                <Input
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="Ex: Sumo de manga 1L"
+                />
               </div>
-
-              {linkMode === "existing" && (
-                <div className="space-y-2">
-                  <Label>Produto existente</Label>
-                  <select
-                    value={outputId}
-                    onChange={(e) => pickExistingProduct(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="">Escolher produto</option>
-                    {(products.data ?? []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Nome do produto</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
                 <div className="space-y-2">
                   <Label>Categoria</Label>
-                  <select
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="">Sem categoria</option>
-                    {(categories.data ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={categoryId ?? "none"} onValueChange={(v) => setCategoryId(v === "none" ? null : v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem categoria</SelectItem>
+                      {(categories.data ?? []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Unidade do produto</Label>
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Unidade</Label>
-                  <select value={unit} onChange={(e) => setUnit(e.target.value)} className={selectClass}>
-                    {UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div className="space-y-2">
                   <Label>Preço de venda</Label>
                   <Input type="number" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
                 </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Quantidade produzida</Label>
+                  <Label>Quantidade produzida (rendimento)</Label>
                   <Input type="number" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Custo adicional</Label>
-                  <Input type="number" value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} />
-                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Custo adicional (mão de obra, energia, etc.)</Label>
+                <Input type="number" value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} />
               </div>
 
               <div className="space-y-2">
                 <Label>Ingredientes</Label>
                 {ingredients.map((ing, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex gap-2">
-                      <select
-                        value={ing.product_id}
-                        onChange={(e) => pickIngredient(idx, e.target.value)}
-                        className={`${selectClass} flex-1`}
-                      >
-                        <option value="">Matéria-prima</option>
+                  <div key={idx} className="flex flex-wrap gap-2 sm:flex-nowrap">
+                    <Select
+                      value={ing.product_id}
+                      onValueChange={(v) => {
+                        const prod = (products.data ?? []).find((p) => p.id === v);
+                        setIngredients(
+                          ingredients.map((x, i) =>
+                            i === idx
+                              ? { ...x, product_id: v, unit_cost: x.unit_cost || String(prod?.cost_price ?? 0) }
+                              : x,
+                          ),
+                        );
+                      }}
+                    >
+                      <SelectTrigger className="min-w-[10rem] flex-1">
+                        <SelectValue placeholder="Matéria-prima" />
+                      </SelectTrigger>
+                      <SelectContent>
                         {(products.data ?? []).map((p) => (
-                          <option key={p.id} value={p.id}>
+                          <SelectItem key={p.id} value={p.id}>
                             {p.name}
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
-                      <Input
-                        type="number"
-                        className="w-20"
-                        placeholder="Qtd"
-                        value={ing.quantity}
-                        onChange={(e) =>
-                          setIngredients(
-                            ingredients.map((x, i) => (i === idx ? { ...x, quantity: e.target.value } : x)),
-                          )
-                        }
-                      />
-                      <Input
-                        type="number"
-                        className="w-24"
-                        placeholder="Custo un."
-                        value={ing.cost}
-                        onChange={(e) =>
-                          setIngredients(
-                            ingredients.map((x, i) => (i === idx ? { ...x, cost: e.target.value } : x)),
-                          )
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setIngredients(ingredients.filter((_, i) => i !== idx))}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                    <p className="text-right text-xs text-muted-foreground">
-                      Subtotal: {money((Number(ing.quantity) || 0) * (Number(ing.cost) || 0))}
-                    </p>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      className="w-20"
+                      placeholder="Qtd"
+                      value={ing.quantity}
+                      onChange={(e) =>
+                        setIngredients(
+                          ingredients.map((x, i) => (i === idx ? { ...x, quantity: e.target.value } : x)),
+                        )
+                      }
+                    />
+                    <Input
+                      type="number"
+                      className="w-24"
+                      placeholder="Custo un."
+                      value={ing.unit_cost}
+                      onChange={(e) =>
+                        setIngredients(
+                          ingredients.map((x, i) => (i === idx ? { ...x, unit_cost: e.target.value } : x)),
+                        )
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIngredients(ingredients.filter((_, i) => i !== idx))}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 ))}
                 <Button
@@ -403,35 +347,28 @@ function ProductionPage() {
                 >
                   <Plus className="size-4" /> Ingrediente
                 </Button>
+                <p className="text-xs text-muted-foreground">
+                  O custo unitário vem preenchido automaticamente com o custo atual do produto escolhido, mas pode
+                  ser editado — por exemplo se comprou esse lote mais caro ou mais barato.
+                </p>
               </div>
 
-              <div className="space-y-1 rounded-md border bg-muted/40 p-3 text-sm">
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Custo dos ingredientes</span>
-                  <span>{money(ingredientsCost)}</span>
+                  <span className="text-muted-foreground">Custo total da produção</span>
+                  <span className="font-medium">{money(totalCost)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Custo adicional</span>
-                  <span>{money(Number(additionalCost) || 0)}</span>
-                </div>
-                <div className="flex justify-between border-t pt-1">
-                  <span className="text-muted-foreground">Custo total de produção</span>
-                  <span>{money(totalCost)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quantidade produzida</span>
-                  <span>
-                    {qty(Number(outputQty) || 0)} {unit}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-t pt-1">
-                  <span className="font-medium">Custo por unidade</span>
-                  <span className="text-lg font-bold">{money(unitCost)}</span>
+                <div className="mt-1 flex justify-between">
+                  <span className="text-muted-foreground">Custo por unidade</span>
+                  <span className="font-semibold">{money(unitCost)}</span>
                 </div>
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => saveRecipe.mutate()} disabled={!name.trim() || (linkMode === "existing" && !outputId) || saveRecipe.isPending}>
+              <Button
+                onClick={() => saveRecipe.mutate()}
+                disabled={!productName.trim() || saveRecipe.isPending}
+              >
                 Guardar
               </Button>
             </DialogFooter>
@@ -446,13 +383,11 @@ function ProductionPage() {
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate font-semibold">{r.name}</p>
+                    <p className="truncate font-semibold">{r.product?.name ?? r.product_name ?? r.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      produz {qty(Number(r.yield_quantity))} {r.yield_unit} · {r.product_name}
+                      produz {qty(Number(r.yield_quantity))} {r.yield_unit} · custo un.{" "}
+                      {money(Number(r.product?.cost_price ?? 0))}
                     </p>
-                    <Badge variant="secondary" className="mt-1">
-                      Custo/un: {money(Number(r.estimated_unit_cost ?? 0))}
-                    </Badge>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <Button variant="outline" size="icon" onClick={() => openEdit(r)}>
@@ -467,7 +402,9 @@ function ProductionPage() {
                   {(r.recipe_ingredients ?? []).map((i) => (
                     <div key={i.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate">{i.product_name}</span>
-                      <span>{qty(Number(i.quantity))}</span>
+                      <span>
+                        {qty(Number(i.quantity))} · {money(Number(i.unit_cost ?? 0))}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -480,22 +417,22 @@ function ProductionPage() {
         <Card className="h-fit">
           <CardContent className="space-y-3 pt-6">
             <p className="font-semibold">Produções recentes</p>
-            {pendingRuns.map((r) => {
-              const recipe = list.find((x) => x.id === r.payload.p_recipe_id);
+            {pendingProductions.map((o) => {
+              const recipe = list.find((r) => r.id === o.payload.p_recipe_id);
               return (
-                <div key={r.localId} className="flex items-start justify-between text-sm opacity-70">
+                <div key={o.localId} className="flex items-start justify-between text-sm opacity-70">
                   <div className="min-w-0">
-                    <p className="truncate">{recipe?.name ?? "Receita"}</p>
+                    <p className="truncate">{recipe?.product?.name ?? recipe?.product_name ?? "Produto"}</p>
                     <p className="text-xs text-muted-foreground">Por sincronizar</p>
                   </div>
-                  <Badge variant="outline">{r.payload.p_batches}x</Badge>
+                  <Badge variant="outline">{o.payload.p_batches}x lote(s)</Badge>
                 </div>
               );
             })}
             {(orders.data ?? []).map((o) => (
               <div key={o.id} className="flex items-start justify-between text-sm">
                 <div className="min-w-0">
-                  <p className="truncate">{o.recipe_name}</p>
+                  <p className="truncate">{o.product_name || o.recipe_name}</p>
                   <p className="text-xs text-muted-foreground">{shortDate(o.created_at)}</p>
                 </div>
                 <div className="text-right">
@@ -504,7 +441,7 @@ function ProductionPage() {
                 </div>
               </div>
             ))}
-            {pendingRuns.length === 0 && (orders.data ?? []).length === 0 && (
+            {pendingProductions.length === 0 && (orders.data ?? []).length === 0 && (
               <p className="text-sm text-muted-foreground">Sem produções.</p>
             )}
           </CardContent>
