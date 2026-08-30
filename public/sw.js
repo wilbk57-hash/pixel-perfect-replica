@@ -4,7 +4,7 @@
 // Os dados (Supabase) NUNCA passam por aqui — vão sempre direto à rede,
 // e a lógica de fila offline já existe em src/lib/offline-queue.ts.
 
-const CACHE_NAME = "bk-business-shell-v1";
+const CACHE_NAME = "bk-business-shell-v2";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {
@@ -32,6 +32,19 @@ self.addEventListener("fetch", (event) => {
   // Nunca cachear chamadas a APIs externas (Supabase, gateway de IA, WhatsApp, etc.)
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/api")) return;
+
+  // O preview do Vite serve módulos React/TanStack com URLs transitórias.
+  // Guardá-los pode misturar versões depois de uma atualização e quebrar os hooks.
+  if (
+    url.pathname.startsWith("/node_modules/") ||
+    url.pathname.startsWith("/src/") ||
+    url.pathname.startsWith("/@") ||
+    url.searchParams.has("v") ||
+    url.searchParams.has("t")
+  ) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Navegação de páginas: tenta rede primeiro, cai para cache (shell) se offline.
   if (request.mode === "navigate") {

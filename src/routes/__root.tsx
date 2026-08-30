@@ -119,8 +119,20 @@ function RootShell({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                window.addEventListener('load', async () => {
+                  if (${JSON.stringify(import.meta.env.PROD)}) {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                    return;
+                  }
+
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(registrations.map((registration) => registration.unregister()));
+                  const cacheNames = await caches.keys();
+                  await Promise.all(
+                    cacheNames
+                      .filter((name) => name.startsWith('bk-business-shell-'))
+                      .map((name) => caches.delete(name)),
+                  );
                 });
               }
             `,

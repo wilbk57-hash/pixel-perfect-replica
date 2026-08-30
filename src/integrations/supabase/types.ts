@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      assistant_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -979,6 +1003,17 @@ export type Database = {
         Returns: string
       }
       remove_employee: { Args: { p_user_id: string }; Returns: undefined }
+      save_recipe: {
+        Args: {
+          p_additional_cost: number
+          p_ingredients: Json
+          p_name: string
+          p_product_id: string
+          p_recipe_id: string
+          p_yield_quantity: number
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "dono" | "funcionario"
