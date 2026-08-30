@@ -973,6 +973,7 @@ export type Database = {
         }
         Returns: string
       }
+      delete_product: { Args: { p_product_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
