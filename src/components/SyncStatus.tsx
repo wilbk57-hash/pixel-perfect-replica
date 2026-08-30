@@ -82,8 +82,6 @@ export function SyncStatus() {
   async function sync(opts?: { silent?: boolean }) {
     if (syncing) return;
     setSyncing(true);
-    // Processa pela ordem em que foi criado; para no primeiro erro para não
-    // saltar à frente de uma ação da qual outra possa depender.
     const queue = [...getQueue()].sort((a, b) => a.createdAt - b.createdAt);
     let ok = 0;
     let fail = 0;
@@ -105,7 +103,6 @@ export function SyncStatus() {
     if (ok === 0 && fail === 0 && !opts?.silent) toast.message("Nada por sincronizar");
   }
 
-  // Quando a ligação volta, tenta sincronizar sozinho (sem incomodar se não houver nada).
   useEffect(() => {
     if (online && queueCount() > 0) {
       sync({ silent: true });
