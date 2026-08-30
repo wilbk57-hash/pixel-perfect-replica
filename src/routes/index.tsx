@@ -8,6 +8,16 @@ import {
   Boxes,
   ArrowRight,
 } from "lucide-react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
@@ -35,22 +45,14 @@ function Dashboard() {
   const { user, isAdmin } = useAuth();
 
   const { data } = useQuery({
-    queryKey: ["dashboard", user?.id, isAdmin],
+    queryKey: ["dashboard", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const salesTable = isAdmin ? "sales_secure" : "sales";
-      const productsTable = isAdmin ? "products_secure" : "products";
       const [sales, products, debts, recent] = await Promise.all([
-        (supabase as any)
-          .from(salesTable)
-          .select("final_total, gross_profit, created_at")
-          .eq("status", "COMPLETED"),
-        (supabase as any)
-          .from(productsTable)
-          .select("id, name, current_stock, min_stock, unit, cost_price")
-          .eq("status", "ACTIVE"),
+        supabase.from("sales").select("final_total, gross_profit, created_at").eq("status", "COMPLETED"),
+        supabase.from("products").select("id, name, current_stock, min_stock, unit, cost_price").eq("status", "ACTIVE"),
         supabase.from("customer_debts").select("remaining_amount").neq("status", "PAID"),
         supabase
           .from("sales")
@@ -63,6 +65,24 @@ function Dashboard() {
       const todaySales = all.filter((s) => new Date(s.created_at) >= today);
       const list = products.data ?? [];
 
+      const days = Array.from({ length: 14 }).map((_, i) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - (13 - i));
+        return {
+          date: d.toISOString().slice(0, 10),
+          label: d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" }),
+        };
+      });
+      const byDay = new Map(days.map((d) => [d.date, { ...d, vendas: 0, lucro: 0 }]));
+      for (const s of all) {
+        const key = new Date(s.created_at).toISOString().slice(0, 10);
+        const row = byDay.get(key);
+        if (row) {
+          row.vendas += Number(s.final_total);
+          row.lucro += Number(s.gross_profit ?? 0);
+        }
+      }
+
       return {
         todayTotal: todaySales.reduce((a, s) => a + Number(s.final_total), 0),
         todayProfit: todaySales.reduce((a, s) => a + Number(s.gross_profit ?? 0), 0),
@@ -74,6 +94,7 @@ function Dashboard() {
         stockValue: list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price ?? 0), 0),
         lowStock: list.filter((p) => Number(p.current_stock) <= Number(p.min_stock)),
         recent: recent.data ?? [],
+        evolution: Array.from(byDay.values()),
       };
     },
   });
@@ -117,6 +138,29 @@ function Dashboard() {
           </Card>
         ))}
       </div>
+
+      <Card className="mt-6 shadow-none">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Evolução das vendas (14 dias)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data?.evolution ?? []} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={48} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => money(v)} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="vendas" name="Vendas" stroke="#16a34a" strokeWidth={2} dot={false} />
+                {isAdmin && (
+                  <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
