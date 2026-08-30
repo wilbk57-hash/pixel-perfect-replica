@@ -61,7 +61,7 @@ function ReportChart({ spec }: { spec: ChartSpec }) {
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Pie
                   data={spec.data}
-                  dataKey={series[0].key}
+                  dataKey={series[0]?.key ?? "value"}
                   nameKey={spec.xKey ?? "name"}
                   cx="50%"
                   cy="50%"
