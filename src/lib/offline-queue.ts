@@ -38,7 +38,7 @@ export type ProduceRecipePayload = {
 };
 
 export type ProductUpsertPayload = {
-  id?: string;
+  id?: string | undefined;
   user_id: string;
   name: string;
   category_id: string | null;
@@ -49,7 +49,7 @@ export type ProductUpsertPayload = {
   cost_price: number;
   min_stock: number;
   sku: string;
-  current_stock?: number;
+  current_stock?: number | undefined;
 };
 
 export type CategoryInsertPayload = {
@@ -58,7 +58,7 @@ export type CategoryInsertPayload = {
 };
 
 export type CustomerUpsertPayload = {
-  id?: string;
+  id?: string | undefined;
   user_id: string;
   name: string;
   phone: string;

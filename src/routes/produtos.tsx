@@ -145,11 +145,14 @@ function ProductsPage() {
       };
       return runOrQueue("product_upsert", payload, d.id ? "Edição de produto" : "Novo produto", async () => {
         if (payload.id) {
-          const { id, ...rest } = payload;
+          const { id, current_stock: _cs, ...rest } = payload;
           const { error } = await supabase.from("products").update(rest).eq("id", id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from("products").insert(payload);
+          const { id: _omit, ...insertData } = payload;
+          const { error } = await supabase
+            .from("products")
+            .insert({ ...insertData, current_stock: insertData.current_stock ?? 0 });
           if (error) throw error;
         }
       });

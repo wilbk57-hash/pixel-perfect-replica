@@ -119,7 +119,7 @@ function ProductionPage() {
         .filter((i) => i.product_id && Number(i.quantity) > 0)
         .map((i) => ({ product_id: i.product_id, quantity: Number(i.quantity) }));
       const { error } = await supabase.rpc("save_recipe", {
-        p_recipe_id: editingId,
+        p_recipe_id: editingId as unknown as string,
         p_name: name,
         p_product_id: outputId,
         p_yield_quantity: Number(outputQty) || 1,
