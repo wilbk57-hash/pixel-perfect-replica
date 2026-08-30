@@ -33,6 +33,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { SyncStatus } from "@/components/SyncStatus";
 
 const NAV = [
   { to: "/", label: "Painel", icon: LayoutDashboard, adminOnly: false },
@@ -242,6 +243,7 @@ export function AppShell({
             <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
             {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
           </div>
+          <SyncStatus />
           {!blocked ? actions : null}
         </header>
         <div className="p-4 md:p-8">
