@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, PAYMENT_METHODS } from "@/lib/format";
+import { addToQueue, type QueuedSaleArgs } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/pdv")({
   head: () => ({
@@ -67,29 +68,52 @@ function PosPage() {
   const total = Math.max(subtotal - (Number(discount) || 0), 0);
   const paidValue = paid === "" ? (method === "CREDIT" ? 0 : total) : Number(paid) || 0;
   const debt = Math.max(total - paidValue, 0);
+
   const checkout = useMutation({
     mutationFn: async () => {
       if (method === "CREDIT" && customerId === "none") {
         throw new Error("Selecione um cliente para registar a venda a crédito.");
       }
-      const { error } = await supabase.rpc("create_sale", {
+
+      const args: QueuedSaleArgs = {
         p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
         ...(customerId === "none" ? {} : { p_customer_id: customerId }),
         p_discount: Number(discount) || 0,
         p_paid: paidValue,
         p_payment_method: method,
         p_notes: "",
-      });
-      if (error) throw error;
+      };
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        addToQueue(args);
+        return { offline: true };
+      }
+
+      const { error } = await supabase.rpc("create_sale", args as any);
+      if (error) {
+        const msg = (error.message || "").toLowerCase();
+        const looksOffline =
+          msg.includes("fetch") || msg.includes("network") || (typeof navigator !== "undefined" && !navigator.onLine);
+        if (looksOffline) {
+          addToQueue(args);
+          return { offline: true };
+        }
+        throw error;
+      }
+      return { offline: false };
     },
-    onSuccess: () => {
-      toast.success("Venda registada");
+    onSuccess: (res) => {
+      if (res.offline) {
+        toast.message("Sem ligação — venda guardada neste aparelho. Toque em \"Sincronizar\" quando voltar online.");
+      } else {
+        toast.success("Venda registada");
+      }
       setCart([]);
       setDiscount("0");
       setPaid("");
       setCustomerId("none");
       qc.invalidateQueries();
-      navigate({ to: "/vendas" });
+      if (!res.offline) navigate({ to: "/vendas" });
     },
     onError: (e: Error) => toast.error(e.message),
   });
