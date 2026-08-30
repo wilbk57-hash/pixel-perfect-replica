@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Plus, Factory, Trash2, Pencil } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { useMemo, useState } from "react";
+import { Plus, Pencil, Tag, Sparkles, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { generateProductImage } from "@/lib/image.functions";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -20,36 +23,66 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { money, qty, shortDate } from "@/lib/format";
-import { runOrQueue, usePendingQueue, type ProduceRecipePayload } from "@/lib/offline-queue";
+import { money, qty, UNITS, PRODUCT_TYPES } from "@/lib/format";
+import {
+  runOrQueue,
+  usePendingQueue,
+  type ProductUpsertPayload,
+  type CategoryInsertPayload,
+} from "@/lib/offline-queue";
 
-export const Route = createFileRoute("/producao")({
+export const Route = createFileRoute("/produtos")({
   head: () => ({
     meta: [
-      { title: "Produção e receitas — BK BUSINESS" },
-      { name: "description", content: "Receitas de produção, consumo de matérias-primas e ordens de fabrico." },
-      { property: "og:title", content: "Produção — BK BUSINESS" },
-      { property: "og:description", content: "Receitas e ordens de produção." },
+      { title: "Produtos e categorias — BK BUSINESS" },
+      { name: "description", content: "Catálogo de produtos, matérias-primas, preços e categorias do negócio." },
+      { property: "og:title", content: "Produtos — BK BUSINESS" },
+      { property: "og:description", content: "Catálogo de produtos, preços e categorias." },
     ],
   }),
-  component: ProductionPage,
+  component: ProductsPage,
 });
 
-type Ingredient = { product_id: string; quantity: string };
-const EMPTY_INGREDIENT: Ingredient = { product_id: "", quantity: "" };
+type Draft = {
+  id?: string;
+  name: string;
+  category_id: string | null;
+  description: string;
+  unit: string;
+  product_type: string;
+  sale_price: string;
+  cost_price: string;
+  current_stock: string;
+  min_stock: string;
+  sku: string;
+};
 
-function ProductionPage() {
+const EMPTY: Draft = {
+  name: "",
+  category_id: null,
+  description: "",
+  unit: "UN",
+  product_type: "FINISHED",
+  sale_price: "0",
+  cost_price: "0",
+  current_stock: "0",
+  min_stock: "0",
+  sku: "",
+};
+
+function ProductsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [outputId, setOutputId] = useState("");
-  const [outputQty, setOutputQty] = useState("1");
-  const [additionalCost, setAdditionalCost] = useState("0");
-  const [ingredients, setIngredients] = useState<Ingredient[]>([{ ...EMPTY_INGREDIENT }]);
-  const [runId, setRunId] = useState<string | null>(null);
-  const [runQty, setRunQty] = useState("1");
+  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [catOpen, setCatOpen] = useState(false);
+  const [catName, setCatName] = useState("");
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [imageTarget, setImageTarget] = useState<{ id: string; name: string; description: string } | null>(null);
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [packaging, setPackaging] = useState("auto");
+  const generateImage = useServerFn(generateProductImage);
 
   const products = useQuery({
     queryKey: ["products", user?.id],
@@ -61,298 +94,434 @@ function ProductionPage() {
     },
   });
 
-  const recipes = useQuery({
-    queryKey: ["recipes", user?.id],
+  const categories = useQuery({
+    queryKey: ["categories", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("recipes")
-        .select("*, recipe_ingredients(*)")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("categories").select("*").order("name");
       if (error) throw error;
       return data;
     },
   });
 
-  const orders = useQuery({
-    queryKey: ["production-orders", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("production_orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const pendingProducts = usePendingQueue("product_upsert");
 
-  const pendingProductions = usePendingQueue("produce_recipe");
+  const mergedProducts = useMemo(() => {
+    const base = products.data ?? [];
+    const byId = new Map(base.map((p) => [p.id, { ...p, _pending: false } as any]));
+    const extra: any[] = [];
+    for (const item of pendingProducts) {
+      const payload = item.payload;
+      if (payload.id && byId.has(payload.id)) {
+        byId.set(payload.id, { ...byId.get(payload.id), ...payload, _pending: true });
+      } else if (!payload.id) {
+        extra.push({
+          ...payload,
+          id: item.localId,
+          current_stock: payload.current_stock ?? 0,
+          image_url: null,
+          _pending: true,
+        });
+      }
+    }
+    return [...Array.from(byId.values()), ...extra];
+  }, [products.data, pendingProducts]);
 
-  function resetForm() {
-    setEditingId(null);
-    setName("");
-    setOutputId("");
-    setOutputQty("1");
-    setAdditionalCost("0");
-    setIngredients([{ ...EMPTY_INGREDIENT }]);
-  }
-
-  function openEdit(r: any) {
-    setEditingId(r.id);
-    setName(r.name);
-    setOutputId(r.product_id ?? "");
-    setOutputQty(String(r.yield_quantity));
-    setAdditionalCost(String(r.additional_cost ?? 0));
-    setIngredients(
-      (r.recipe_ingredients ?? []).length
-        ? r.recipe_ingredients.map((i: any) => ({ product_id: i.product_id, quantity: String(i.quantity) }))
-        : [{ ...EMPTY_INGREDIENT }],
-    );
-    setOpen(true);
-  }
-
-  const saveRecipe = useMutation({
-    mutationFn: async () => {
-      const rows = ingredients
-        .filter((i) => i.product_id && Number(i.quantity) > 0)
-        .map((i) => ({ product_id: i.product_id, quantity: Number(i.quantity) }));
-      const { error } = await supabase.rpc("save_recipe", {
-        p_recipe_id: editingId,
-        p_name: name,
-        p_product_id: outputId,
-        p_yield_quantity: Number(outputQty) || 1,
-        p_additional_cost: Number(additionalCost) || 0,
-        p_ingredients: rows,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success(editingId ? "Receita atualizada" : "Receita criada");
-      setOpen(false);
-      resetForm();
-      qc.invalidateQueries();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const produce = useMutation({
-    mutationFn: async () => {
-      const payload: ProduceRecipePayload = { p_recipe_id: runId!, p_batches: Number(runQty) || 1 };
-      return runOrQueue("produce_recipe", payload, "Produção", async () => {
-        const { error } = await supabase.rpc("produce_recipe", payload as any);
-        if (error) throw error;
+  const saveProduct = useMutation({
+    mutationFn: async (d: Draft) => {
+      const payload: ProductUpsertPayload = {
+        id: d.id,
+        user_id: user!.id,
+        name: d.name,
+        category_id: d.category_id,
+        description: d.description,
+        unit: d.unit,
+        product_type: d.product_type,
+        sale_price: Number(d.sale_price) || 0,
+        cost_price: Number(d.cost_price) || 0,
+        min_stock: Number(d.min_stock) || 0,
+        sku: d.sku,
+        ...(d.id ? {} : { current_stock: Number(d.current_stock) || 0 }),
+      };
+      return runOrQueue("product_upsert", payload, d.id ? "Edição de produto" : "Novo produto", async () => {
+        if (payload.id) {
+          const { id, ...rest } = payload;
+          const { error } = await supabase.from("products").update(rest).eq("id", id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("products").insert(payload);
+          if (error) throw error;
+        }
       });
     },
     onSuccess: (res) => {
       toast.success(
         res.offline
-          ? "Sem ligação — produção guardada neste aparelho. Toque em \"Sincronizar\" quando voltar online."
-          : "Produção concluída",
+          ? "Sem ligação — produto guardado neste aparelho. Toque em \"Sincronizar\" quando voltar online."
+          : "Produto guardado",
       );
-      setRunId(null);
-      setRunQty("1");
-      qc.invalidateQueries();
+      setOpen(false);
+      setDraft(EMPTY);
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const list = recipes.data ?? [];
+  const saveCategory = useMutation({
+    mutationFn: async (name: string) => {
+      const payload: CategoryInsertPayload = { user_id: user!.id, name };
+      return runOrQueue("category_insert", payload, "Nova categoria", async () => {
+        const { error } = await supabase.from("categories").insert(payload);
+        if (error) throw error;
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(res.offline ? "Sem ligação — categoria guardada neste aparelho" : "Categoria criada");
+      setCatName("");
+      setCatOpen(false);
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const generateProductPhoto = useMutation({
+    mutationFn: async (p: {
+      id: string;
+      name: string;
+      description: string;
+      customInstructions: string;
+      packaging: string;
+    }) => {
+      setGeneratingId(p.id);
+      return await generateImage({
+        data: {
+          productId: p.id,
+          name: p.name,
+          description: p.description,
+          customInstructions: p.customInstructions,
+          packaging: p.packaging,
+        },
+      });
+    },
+    onSettled: () => setGeneratingId(null),
+    onSuccess: () => {
+      toast.success("Imagem gerada com sucesso");
+      setImageTarget(null);
+      setCustomInstructions("");
+      setPackaging("auto");
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const filtered = mergedProducts.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
 
   return (
     <AppShell
-      title="Produção"
-      subtitle={`${list.length} receita(s)`}
+      title="Produtos"
+      subtitle="Catálogo, preços e matérias-primas"
       adminOnly
       actions={
-        <Dialog
-          open={open}
-          onOpenChange={(v) => {
-            setOpen(v);
-            if (!v) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="size-4" /> Receita
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Editar receita" : "Nova receita"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
+        <div className="flex gap-2">
+          <Dialog open={catOpen} onOpenChange={setCatOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Tag className="size-4" /> Categoria
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova categoria</DialogTitle>
+              </DialogHeader>
               <div className="space-y-2">
                 <Label>Nome</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
+                <Input value={catName} onChange={(e) => setCatName(e.target.value)} />
               </div>
+              <DialogFooter>
+                <Button onClick={() => saveCategory.mutate(catName)} disabled={!catName.trim()}>
+                  Guardar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={open}
+            onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) setDraft(EMPTY);
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="size-4" /> Produto
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{draft.id ? "Editar produto" : "Novo produto"}</DialogTitle>
+              </DialogHeader>
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Nome</Label>
+                  <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </div>
                 <div className="space-y-2">
-                  <Label>Produto final</Label>
-                  <Select value={outputId} onValueChange={setOutputId}>
+                  <Label>Categoria</Label>
+                  <Select
+                    value={draft.category_id ?? "none"}
+                    onValueChange={(v) => setDraft({ ...draft, category_id: v === "none" ? null : v })}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Escolher" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(products.data ?? []).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
+                      <SelectItem value="none">Sem categoria</SelectItem>
+                      {categories.data?.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Quantidade produzida</Label>
-                  <Input type="number" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} />
+                  <Label>Tipo</Label>
+                  <Select value={draft.product_type} onValueChange={(v) => setDraft({ ...draft, product_type: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRODUCT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Custo adicional (mão de obra, energia, etc.)</Label>
-                <Input type="number" value={additionalCost} onChange={(e) => setAdditionalCost(e.target.value)} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Ingredientes</Label>
-                {ingredients.map((ing, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <Select
-                      value={ing.product_id}
-                      onValueChange={(v) =>
-                        setIngredients(ingredients.map((x, i) => (i === idx ? { ...x, product_id: v } : x)))
-                      }
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Matéria-prima" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(products.data ?? []).map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-2">
+                  <Label>Unidade</Label>
+                  <Select value={draft.unit} onValueChange={(v) => setDraft({ ...draft, unit: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Código / SKU</Label>
+                  <Input value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Preço de venda</Label>
+                  <Input
+                    type="number"
+                    value={draft.sale_price}
+                    onChange={(e) => setDraft({ ...draft, sale_price: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Preço de custo</Label>
+                  <Input
+                    type="number"
+                    value={draft.cost_price}
+                    onChange={(e) => setDraft({ ...draft, cost_price: e.target.value })}
+                  />
+                </div>
+                {!draft.id && (
+                  <div className="space-y-2">
+                    <Label>Estoque inicial</Label>
                     <Input
                       type="number"
-                      className="w-24"
-                      placeholder="Qtd"
-                      value={ing.quantity}
-                      onChange={(e) =>
-                        setIngredients(
-                          ingredients.map((x, i) => (i === idx ? { ...x, quantity: e.target.value } : x)),
-                        )
-                      }
+                      value={draft.current_stock}
+                      onChange={(e) => setDraft({ ...draft, current_stock: e.target.value })}
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIngredients(ingredients.filter((_, i) => i !== idx))}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
                   </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIngredients([...ingredients, { ...EMPTY_INGREDIENT }])}
-                >
-                  <Plus className="size-4" /> Ingrediente
-                </Button>
+                )}
+                <div className="space-y-2">
+                  <Label>Estoque mínimo</Label>
+                  <Input
+                    type="number"
+                    value={draft.min_stock}
+                    onChange={(e) => setDraft({ ...draft, min_stock: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Descrição</Label>
+                  <Textarea
+                    value={draft.description}
+                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => saveRecipe.mutate()} disabled={!name.trim() || !outputId || saveRecipe.isPending}>
-                Guardar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button onClick={() => saveProduct.mutate(draft)} disabled={!draft.name.trim()}>
+                  Guardar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="grid gap-3 md:grid-cols-2 lg:col-span-2">
-          {list.map((r) => (
-            <Card key={r.id}>
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{r.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      produz {qty(Number(r.yield_quantity))} {r.yield_unit} · {r.product_name}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button variant="outline" size="icon" onClick={() => openEdit(r)}>
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button size="sm" onClick={() => setRunId(r.id)}>
-                      <Factory className="size-4" /> Produzir
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-3 space-y-1 text-sm">
-                  {(r.recipe_ingredients ?? []).map((i) => (
-                    <div key={i.id} className="flex justify-between text-muted-foreground">
-                      <span className="truncate">{i.product_name}</span>
-                      <span>{qty(Number(i.quantity))}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {list.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma receita criada.</p>}
-        </div>
+      <Input
+        placeholder="Pesquisar produto…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="mb-4 max-w-sm"
+      />
 
-        <Card className="h-fit">
-          <CardContent className="space-y-3 pt-6">
-            <p className="font-semibold">Produções recentes</p>
-            {pendingProductions.map((o) => {
-              const recipe = list.find((r) => r.id === o.payload.p_recipe_id);
-              return (
-                <div key={o.localId} className="flex items-start justify-between text-sm opacity-70">
-                  <div className="min-w-0">
-                    <p className="truncate">{recipe?.name ?? "Receita"}</p>
-                    <p className="text-xs text-muted-foreground">Por sincronizar</p>
-                  </div>
-                  <Badge variant="outline">{o.payload.p_batches}x lote(s)</Badge>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((p) => (
+          <Card key={p.id} className="overflow-hidden">
+            <div className="relative aspect-square w-full overflow-hidden bg-muted">
+              {p.image_url ? (
+                <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                  <ImageOff className="size-8" />
                 </div>
-              );
-            })}
-            {(orders.data ?? []).map((o) => (
-              <div key={o.id} className="flex items-start justify-between text-sm">
-                <div className="min-w-0">
-                  <p className="truncate">{o.recipe_name}</p>
-                  <p className="text-xs text-muted-foreground">{shortDate(o.created_at)}</p>
-                </div>
-                <div className="text-right">
-                  <Badge variant="secondary">{qty(Number(o.produced_quantity))}</Badge>
-                  <p className="text-xs text-muted-foreground">{money(Number(o.total_cost))}</p>
-                </div>
+              )}
+              {p._pending && (
+                <Badge variant="outline" className="absolute left-2 top-2 bg-background/90 text-[10px]">
+                  Por sincronizar
+                </Badge>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 pt-10">
+                <p className="truncate text-sm font-semibold text-white drop-shadow-sm">{p.name}</p>
+                <p className="truncate text-xs text-white/80">{catName_(p.category_id)}</p>
               </div>
-            ))}
-            {pendingProductions.length === 0 && (orders.data ?? []).length === 0 && (
-              <p className="text-sm text-muted-foreground">Sem produções.</p>
-            )}
-          </CardContent>
-        </Card>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="absolute right-2 top-2 shadow"
+                disabled={generatingId === p.id || (typeof navigator !== "undefined" && !navigator.onLine)}
+                onClick={() => {
+                  setImageTarget({ id: p.id, name: p.name, description: p.description ?? "" });
+                  setCustomInstructions("");
+                  setPackaging("auto");
+                }}
+              >
+                <Sparkles className="size-4" />
+                {generatingId === p.id
+                  ? "A gerar…"
+                  : p.image_url
+                    ? "Regenerar imagem"
+                    : "Gerar imagem IA"}
+              </Button>
+            </div>
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setDraft({
+                      id: p.id,
+                      name: p.name,
+                      category_id: p.category_id,
+                      description: p.description,
+                      unit: p.unit,
+                      product_type: p.product_type,
+                      sale_price: String(p.sale_price),
+                      cost_price: String(p.cost_price),
+                      current_stock: String(p.current_stock),
+                      min_stock: String(p.min_stock),
+                      sku: p.sku,
+                    });
+                    setOpen(true);
+                  }}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              </div>
+              <div className="mt-2 flex items-end justify-between">
+                <div>
+                  <p className="text-lg font-bold">{money(Number(p.sale_price))}</p>
+                  <p className="text-xs text-muted-foreground">custo {money(Number(p.cost_price))}</p>
+                </div>
+                <Badge variant={Number(p.current_stock) <= Number(p.min_stock) ? "destructive" : "secondary"}>
+                  {qty(Number(p.current_stock))} {p.unit}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+        )}
       </div>
 
-      <Dialog open={!!runId} onOpenChange={(v) => !v && setRunId(null)}>
+      <Dialog
+        open={!!imageTarget}
+        onOpenChange={(v) => {
+          if (!v) {
+            setImageTarget(null);
+            setCustomInstructions("");
+            setPackaging("auto");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Executar produção</DialogTitle>
+            <DialogTitle>Gerar imagem de {imageTarget?.name}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>Número de lotes</Label>
-            <Input type="number" value={runQty} onChange={(e) => setRunQty(e.target.value)} />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Formato da embalagem</Label>
+              <Select value={packaging} onValueChange={setPackaging}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automático (a IA escolhe)</SelectItem>
+                  <SelectItem value="glass_bottle">Garrafa de vidro</SelectItem>
+                  <SelectItem value="plastic_bottle">Garrafa de plástico</SelectItem>
+                  <SelectItem value="can">Lata</SelectItem>
+                  <SelectItem value="jar">Frasco / jarra</SelectItem>
+                  <SelectItem value="box">Caixa / embalagem</SelectItem>
+                  <SelectItem value="none">Sem embalagem (só o ingrediente)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Instruções extra (opcional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Descreva mais detalhes — por exemplo "numa mesa de madeira rústica", "fundo azul", "sem
+                tampa". Se deixar em branco, a IA completa o resto automaticamente.
+              </p>
+              <Textarea
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                placeholder="Ex: fundo de madeira escura, luz quente…"
+                rows={3}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => produce.mutate()} disabled={produce.isPending}>
-              Confirmar
+            <Button
+              onClick={() =>
+                imageTarget &&
+                generateProductPhoto.mutate({
+                  id: imageTarget.id,
+                  name: imageTarget.name,
+                  description: imageTarget.description,
+                  customInstructions,
+                  packaging: packaging === "auto" ? "" : packaging,
+                })
+              }
+              disabled={generateProductPhoto.isPending}
+            >
+              <Sparkles className="size-4" />
+              {generateProductPhoto.isPending ? "A gerar…" : "Gerar imagem"}
             </Button>
           </DialogFooter>
         </DialogContent>
