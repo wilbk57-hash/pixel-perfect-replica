@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type GenerateImageInput = { productId: string; name: string; description?: string };
+type GenerateImageInput = { productId: string; name: string; description?: string; customInstructions?: string };
 
-function buildPrompt(name: string, description?: string) {
+function buildPrompt(name: string, description?: string, customInstructions?: string) {
   const extra = description?.trim() ? `, ${description.trim()}` : "";
-  return (
+  const base =
     `Ultra realistic professional commercial product photography of "${name}"${extra}. ` +
     `Identify the single main raw ingredient of this product and make it the clear visual hero of ` +
     `the frame, in sharp macro-like focus, with its natural texture, color and freshness fully visible. ` +
@@ -14,7 +14,13 @@ function buildPrompt(name: string, description?: string) {
     `or around it. Studio softbox lighting from the top, shallow depth of field, clean neutral ` +
     `background. Compose with generous negative space and a subtly darker, softly shadowed tone in ` +
     `the bottom third of the frame, so text can be overlaid there later. Square 1:1 composition, ` +
-    `ultra realistic, 4k, high-end e-commerce photography, no text, no watermark, no logo.`
+    `ultra realistic, 4k, high-end e-commerce photography, no text, no watermark, no logo.`;
+
+  if (!customInstructions?.trim()) return base;
+
+  return (
+    `${base} Additional specific instructions from the shop owner that MUST be followed and take ` +
+    `priority over the general styling above whenever they conflict: "${customInstructions.trim()}".`
   );
 }
 
@@ -27,6 +33,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
       productId: input.productId,
       name: input.name.trim(),
       description: input.description ?? "",
+      customInstructions: input.customInstructions ?? "",
     };
   })
   .handler(async ({ data, context }) => {
@@ -35,7 +42,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
     const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("Serviço de IA indisponível. Tente novamente mais tarde.");
 
-    const prompt = buildPrompt(data.name, data.description);
+    const prompt = buildPrompt(data.name, data.description, data.customInstructions);
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
@@ -73,11 +80,8 @@ export const generateProductImage = createServerFn({ method: "POST" })
       .upload(path, bytes, { contentType: "image/png", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
-    const { data: signed, error: signError } = await supabase.storage
-      .from("product-images")
-      .createSignedUrl(path, 60 * 60 * 24 * 365 * 5);
-    if (signError || !signed?.signedUrl) throw new Error(signError?.message ?? "Falha ao obter a imagem.");
-    const publicUrl = `${signed.signedUrl}&v=${Date.now()}`;
+    const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
+    const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
 
     const { error: updateError } = await supabase
       .from("products")
