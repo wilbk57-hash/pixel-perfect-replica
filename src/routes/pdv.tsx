@@ -45,7 +45,7 @@ function PosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, unit, sale_price, current_stock")
+        .select("id, name, unit, sale_price, current_stock, image_url")
         .eq("status", "ACTIVE")
         .order("name");
       if (error) throw error;
@@ -137,8 +137,15 @@ function PosPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((p) => (
               <button key={p.id} onClick={() => add(p)} className="text-left">
-                <Card className="h-full transition-shadow hover:shadow-[var(--shadow-lift)]">
-                  <CardContent className="pt-6">
+                <Card className="h-full overflow-hidden transition-shadow hover:shadow-[var(--shadow-lift)]">
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} className="h-24 w-full object-cover" />
+                  ) : (
+                    <div className="flex h-24 w-full items-center justify-center bg-muted text-muted-foreground">
+                      <ShoppingCart className="size-6" />
+                    </div>
+                  )}
+                  <CardContent className="pt-3">
                     <p className="truncate font-medium">{p.name}</p>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="font-bold">{money(Number(p.sale_price))}</span>
