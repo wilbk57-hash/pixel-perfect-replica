@@ -35,14 +35,22 @@ function Dashboard() {
   const { user, isAdmin } = useAuth();
 
   const { data } = useQuery({
-    queryKey: ["dashboard", user?.id],
+    queryKey: ["dashboard", user?.id, isAdmin],
     enabled: !!user,
     queryFn: async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const salesTable = isAdmin ? "sales_secure" : "sales";
+      const productsTable = isAdmin ? "products_secure" : "products";
       const [sales, products, debts, recent] = await Promise.all([
-        supabase.from("sales").select("final_total, gross_profit, created_at").eq("status", "COMPLETED"),
-        supabase.from("products").select("id, name, current_stock, min_stock, unit, cost_price").eq("status", "ACTIVE"),
+        (supabase as any)
+          .from(salesTable)
+          .select("final_total, gross_profit, created_at")
+          .eq("status", "COMPLETED"),
+        (supabase as any)
+          .from(productsTable)
+          .select("id, name, current_stock, min_stock, unit, cost_price")
+          .eq("status", "ACTIVE"),
         supabase.from("customer_debts").select("remaining_amount").neq("status", "PAID"),
         supabase
           .from("sales")
@@ -57,13 +65,13 @@ function Dashboard() {
 
       return {
         todayTotal: todaySales.reduce((a, s) => a + Number(s.final_total), 0),
-        todayProfit: todaySales.reduce((a, s) => a + Number(s.gross_profit), 0),
+        todayProfit: todaySales.reduce((a, s) => a + Number(s.gross_profit ?? 0), 0),
         todayCount: todaySales.length,
         monthTotal: all
           .filter((s) => new Date(s.created_at).getMonth() === today.getMonth())
           .reduce((a, s) => a + Number(s.final_total), 0),
         debtTotal: (debts.data ?? []).reduce((a, d) => a + Number(d.remaining_amount), 0),
-        stockValue: list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price), 0),
+        stockValue: list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price ?? 0), 0),
         lowStock: list.filter((p) => Number(p.current_stock) <= Number(p.min_stock)),
         recent: recent.data ?? [],
       };
@@ -145,17 +153,19 @@ function Dashboard() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Boxes className="size-4" /> Valor em estoque
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{money(data?.stockValue)}</p>
-              <p className="text-xs text-muted-foreground">a preço de custo</p>
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Boxes className="size-4" /> Valor em estoque
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{money(data?.stockValue)}</p>
+                <p className="text-xs text-muted-foreground">a preço de custo</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
