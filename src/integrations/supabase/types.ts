@@ -990,6 +990,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      my_business_id: { Args: never; Returns: string }
       pay_debt: {
         Args: {
           p_amount: number
