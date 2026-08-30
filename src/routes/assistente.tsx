@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Send } from "lucide-react";
+import { Sparkles, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { AssistantReport } from "@/components/AssistantReport";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { askAssistant } from "@/lib/assistant.functions";
 
 export const Route = createFileRoute("/assistente")({
@@ -36,26 +39,68 @@ const SUGGESTIONS = [
 ];
 
 function AssistantPage() {
+  const { user } = useAuth();
   const ask = useServerFn(askAssistant);
   const qc = useQueryClient();
-  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [clearOpen, setClearOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const history = useQuery({
+    queryKey: ["assistant-messages", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("assistant_messages")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return data as { id: string; role: "user" | "assistant"; content: string }[];
+    },
+  });
+
+  const messages: Msg[] = (history.data ?? []).map((m) => ({ role: m.role, content: m.content }));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages.length]);
 
   const send = useMutation({
     mutationFn: async (text: string) => {
-      const next: Msg[] = [...messages, { role: "user", content: text }];
-      setMessages(next);
-      const res = await ask({ data: { messages: next } });
+      const { error: insErr } = await supabase.from("assistant_messages").insert({
+        user_id: user!.id,
+        role: "user",
+        content: text,
+      });
+      if (insErr) throw insErr;
+      qc.invalidateQueries({ queryKey: ["assistant-messages"] });
+
+      const res = await ask({ data: { messages: [...messages, { role: "user", content: text }] } });
+
+      const { error: repErr } = await supabase.from("assistant_messages").insert({
+        user_id: user!.id,
+        role: "assistant",
+        content: res.reply,
+      });
+      if (repErr) throw repErr;
       return res.reply;
     },
-    onSuccess: (reply) => {
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+    onSuccess: () => {
       qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const clearChat = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("assistant_messages").delete().eq("user_id", user!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Conversa apagada");
+      setClearOpen(false);
+      qc.invalidateQueries({ queryKey: ["assistant-messages"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -72,6 +117,34 @@ function AssistantPage() {
       title="Assistente IA"
       subtitle="Analisa o negócio, gera relatórios com tabelas e gráficos, e altera dados a pedido"
       adminOnly
+      actions={
+        messages.length > 0 ? (
+          <Dialog open={clearOpen} onOpenChange={setClearOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Trash2 className="size-4" />
+                Limpar conversa
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Apagar toda a conversa?</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Esta ação remove todo o histórico com o assistente e não pode ser desfeita.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setClearOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" onClick={() => clearChat.mutate()} disabled={clearChat.isPending}>
+                  Apagar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null
+      }
     >
       <div className="mx-auto flex h-[calc(100vh-11rem)] max-w-4xl flex-col">
         <div className="flex-1 space-y-4 overflow-y-auto pr-1">
