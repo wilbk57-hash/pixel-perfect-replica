@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { Plus, Pencil, Tag } from "lucide-react";
+import { Plus, Pencil, Tag, Sparkles, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { generateProductImage } from "@/lib/image.functions";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +72,8 @@ function ProductsPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [catOpen, setCatOpen] = useState(false);
   const [catName, setCatName] = useState("");
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const generateImage = useServerFn(generateProductImage);
 
   const products = useQuery({
     queryKey: ["products", user?.id],
@@ -134,6 +138,21 @@ function ProductsPage() {
       setCatName("");
       setCatOpen(false);
       qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const generateProductPhoto = useMutation({
+    mutationFn: async (p: { id: string; name: string; description: string }) => {
+      setGeneratingId(p.id);
+      return await generateImage({
+        data: { productId: p.id, name: p.name, description: p.description },
+      });
+    },
+    onSettled: () => setGeneratingId(null),
+    onSuccess: () => {
+      toast.success("Imagem gerada com sucesso");
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -309,6 +328,35 @@ function ProductsPage() {
         {filtered.map((p) => (
           <Card key={p.id}>
             <CardContent className="pt-6">
+              <div className="mb-3 flex items-center gap-3">
+                {p.image_url ? (
+                  <img
+                    src={p.image_url}
+                    alt={p.name}
+                    className="size-16 shrink-0 rounded-md border object-cover"
+                  />
+                ) : (
+                  <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-dashed text-muted-foreground">
+                    <ImageOff className="size-5" />
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={generatingId === p.id}
+                  onClick={() =>
+                    generateProductPhoto.mutate({ id: p.id, name: p.name, description: p.description })
+                  }
+                >
+                  <Sparkles className="size-4" />
+                  {generatingId === p.id
+                    ? "A gerar…"
+                    : p.image_url
+                      ? "Regenerar imagem"
+                      : "Gerar imagem IA"}
+                </Button>
+              </div>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{p.name}</p>
