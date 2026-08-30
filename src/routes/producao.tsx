@@ -38,6 +38,11 @@ export const Route = createFileRoute("/producao")({
 type Ingredient = { product_id: string; quantity: string };
 const EMPTY_INGREDIENT: Ingredient = { product_id: "", quantity: "" };
 
+const selectClass =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
+
 function ProductionPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -119,7 +124,7 @@ function ProductionPage() {
         .filter((i) => i.product_id && Number(i.quantity) > 0)
         .map((i) => ({ product_id: i.product_id, quantity: Number(i.quantity) }));
       const { error } = await supabase.rpc("save_recipe", {
-        p_recipe_id: editingId as unknown as string,
+        p_recipe_id: editingId,
         p_name: name,
         p_product_id: outputId,
         p_yield_quantity: Number(outputQty) || 1,
@@ -190,18 +195,14 @@ function ProductionPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Produto final</Label>
-                  <Select value={outputId} onValueChange={setOutputId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Escolher" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(products.data ?? []).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select value={outputId} onChange={(e) => setOutputId(e.target.value)} className={selectClass}>
+                    <option value="">Escolher</option>
+                    {(products.data ?? []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Quantidade produzida</Label>
@@ -217,23 +218,22 @@ function ProductionPage() {
                 <Label>Ingredientes</Label>
                 {ingredients.map((ing, idx) => (
                   <div key={idx} className="flex gap-2">
-                    <Select
+                    <select
                       value={ing.product_id}
-                      onValueChange={(v) =>
-                        setIngredients(ingredients.map((x, i) => (i === idx ? { ...x, product_id: v } : x)))
+                      onChange={(e) =>
+                        setIngredients(
+                          ingredients.map((x, i) => (i === idx ? { ...x, product_id: e.target.value } : x)),
+                        )
                       }
+                      className={`${selectClass} flex-1`}
                     >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Matéria-prima" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(products.data ?? []).map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="">Matéria-prima</option>
+                      {(products.data ?? []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
                     <Input
                       type="number"
                       className="w-24"
