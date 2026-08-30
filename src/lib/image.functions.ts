@@ -65,7 +65,7 @@ export const generateProductImage = createServerFn({ method: "POST" })
     // Resolve o dono efetivo do negócio (o próprio, ou o dono a quem o
     // funcionário está associado), para guardar a imagem sempre na mesma
     // pasta do negócio — independentemente de quem gera a imagem.
-    const { data: ownerId, error: ownerError } = await supabase.rpc("business_id", { _user_id: context.userId });
+    const { data: ownerId, error: ownerError } = await (supabase.rpc as any)("my_business_id");
     if (ownerError || !ownerId) throw new Error("Não foi possível identificar o negócio.");
 
     const prompt = buildPrompt(data.name, data.description, data.customInstructions, data.packaging);

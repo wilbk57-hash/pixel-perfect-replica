@@ -973,6 +973,7 @@ export type Database = {
         }
         Returns: string
       }
+      delete_product: { Args: { p_product_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -989,6 +990,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      my_business_id: { Args: never; Returns: string }
       pay_debt: {
         Args: {
           p_amount: number
