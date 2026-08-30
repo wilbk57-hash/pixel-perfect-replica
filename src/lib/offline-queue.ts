@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
 
-// ============================================================
-// Tipos de ação que podem ser registados offline e sincronizados depois.
-// ============================================================
-
 export type ActionKind =
   | "sale"
   | "pay_debt"
@@ -84,7 +80,6 @@ export type QueuedAction =
 const KEY = "bk_offline_queue_v2";
 const LEGACY_KEY = "bk_offline_sales_queue";
 
-// Migra silenciosamente a fila antiga (só vendas) para o novo formato.
 function migrateLegacy(): QueuedAction[] {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
@@ -148,10 +143,6 @@ export function looksLikeOfflineError(e: unknown) {
   return msg.includes("fetch") || msg.includes("network") || msg.includes("failed to fetch") || isOffline();
 }
 
-/**
- * Corre `run`. Se o aparelho estiver offline (ou a chamada falhar por motivo de rede),
- * guarda a ação na fila local em vez de propagar o erro.
- */
 export async function runOrQueue<T>(
   kind: ActionKind,
   payload: unknown,
@@ -174,7 +165,6 @@ export async function runOrQueue<T>(
   }
 }
 
-/** Hook: devolve as ações em fila (opcionalmente filtradas por tipo), atualizado automaticamente. */
 export function usePendingQueue<K extends ActionKind = ActionKind>(kind?: K) {
   const [items, setItems] = useState<QueuedAction[]>([]);
 
