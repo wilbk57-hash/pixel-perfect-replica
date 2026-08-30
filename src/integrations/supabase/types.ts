@@ -585,6 +585,7 @@ export type Database = {
           additional_cost: number
           created_at: string
           description: string
+          estimated_unit_cost: number
           id: string
           name: string
           product_id: string | null
@@ -599,6 +600,7 @@ export type Database = {
           additional_cost?: number
           created_at?: string
           description?: string
+          estimated_unit_cost?: number
           id?: string
           name: string
           product_id?: string | null
@@ -613,6 +615,7 @@ export type Database = {
           additional_cost?: number
           created_at?: string
           description?: string
+          estimated_unit_cost?: number
           id?: string
           name?: string
           product_id?: string | null
@@ -1008,10 +1011,13 @@ export type Database = {
       save_recipe: {
         Args: {
           p_additional_cost: number
+          p_category_id: string
           p_ingredients: Json
           p_name: string
           p_product_id: string
           p_recipe_id: string
+          p_sale_price: number
+          p_unit: string
           p_yield_quantity: number
         }
         Returns: string
