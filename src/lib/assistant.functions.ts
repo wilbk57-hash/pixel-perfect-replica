@@ -192,14 +192,24 @@ export const askAssistant = createServerFn({ method: "POST" })
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([dia, v]) => ({ dia, total: Math.round(v.total), lucro: Math.round(v.lucro) }));
 
+        const produtos = (products.data ?? []).map((p) =>
+          canEdit ? p : { ...p, cost_price: undefined },
+        );
+        const ultimas_vendas = (sales.data ?? []).map((s) =>
+          canEdit ? s : { ...s, gross_profit: undefined },
+        );
+        const vendasPorDia = canEdit
+          ? vendas_por_dia_ultimos_30_dias
+          : vendas_por_dia_ultimos_30_dias.map((d) => ({ dia: d.dia, total: d.total }));
+
         return {
           moeda: "FCFA",
           data_actual: new Date().toISOString(),
-          produtos: products.data ?? [],
+          produtos,
           clientes: customers.data ?? [],
           dividas_em_aberto: debts.data ?? [],
-          ultimas_vendas: sales.data ?? [],
-          vendas_por_dia_ultimos_30_dias,
+          ultimas_vendas,
+          vendas_por_dia_ultimos_30_dias: vendasPorDia,
         };
       }
 
@@ -213,7 +223,8 @@ export const askAssistant = createServerFn({ method: "POST" })
           .order("created_at", { ascending: false })
           .limit(500);
         if (error) return { error: error.message };
-        return { desde: since, itens: rows ?? [] };
+        const itens = canEdit ? (rows ?? []) : (rows ?? []).map((r) => ({ ...r, profit: undefined }));
+        return { desde: since, itens };
       }
 
       if (name === "update_product") {
