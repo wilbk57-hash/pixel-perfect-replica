@@ -60,7 +60,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Ficheiros estáticos (JS, CSS, imagens): cache first, atualiza em segundo plano.
+  // Bundles do build (/assets/*): rede primeiro. Cada publicação gera nomes novos,
+  // por isso servir de cache pode apontar para ficheiros que já não existem.
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request)),
+    );
+    return;
+  }
+
+  // Restantes ficheiros estáticos (ícones, imagens): cache first, atualiza em segundo plano.
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
