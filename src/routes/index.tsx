@@ -51,8 +51,8 @@ function Dashboard() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const [sales, products, debts, recent] = await Promise.all([
-        supabase.from("sales").select("final_total, gross_profit, created_at").eq("status", "COMPLETED"),
-        supabase.from("products").select("id, name, current_stock, min_stock, unit, cost_price").eq("status", "ACTIVE"),
+        supabase.from("sales_secure").select("final_total, gross_profit, created_at").eq("status", "COMPLETED"),
+        supabase.from("products_secure").select("id, name, current_stock, min_stock, unit, cost_price").eq("status", "ACTIVE"),
         supabase.from("customer_debts").select("remaining_amount").neq("status", "PAID"),
         supabase
           .from("sales")
