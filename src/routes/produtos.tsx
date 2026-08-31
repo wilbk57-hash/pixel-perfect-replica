@@ -75,7 +75,7 @@ const selectClass =
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 function ProductsPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -90,7 +90,7 @@ function ProductsPage() {
 
   const products = useQuery({
     queryKey: ["products", user?.id],
-    enabled: !!user,
+    enabled: !!user && isAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("products").select("*").order("name");
       if (error) throw error;
