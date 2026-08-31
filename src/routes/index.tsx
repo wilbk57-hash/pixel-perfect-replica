@@ -62,7 +62,7 @@ function Dashboard() {
       ]);
 
       const all = sales.data ?? [];
-      const todaySales = all.filter((s) => new Date(s.created_at) >= today);
+      const todaySales = all.filter((s) => new Date(s.created_at ?? 0) >= today);
       const list = products.data ?? [];
 
       const days = Array.from({ length: 14 }).map((_, i) => {
@@ -75,7 +75,7 @@ function Dashboard() {
       });
       const byDay = new Map(days.map((d) => [d.date, { ...d, vendas: 0, lucro: 0 }]));
       for (const s of all) {
-        const key = new Date(s.created_at).toISOString().slice(0, 10);
+        const key = new Date(s.created_at ?? 0).toISOString().slice(0, 10);
         const row = byDay.get(key);
         if (row) {
           row.vendas += Number(s.final_total);
@@ -88,7 +88,7 @@ function Dashboard() {
         todayProfit: todaySales.reduce((a, s) => a + Number(s.gross_profit ?? 0), 0),
         todayCount: todaySales.length,
         monthTotal: all
-          .filter((s) => new Date(s.created_at).getMonth() === today.getMonth())
+          .filter((s) => new Date(s.created_at ?? 0).getMonth() === today.getMonth())
           .reduce((a, s) => a + Number(s.final_total), 0),
         debtTotal: (debts.data ?? []).reduce((a, d) => a + Number(d.remaining_amount), 0),
         stockValue: list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price ?? 0), 0),
