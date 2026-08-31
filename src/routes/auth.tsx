@@ -72,9 +72,9 @@ function AuthPage() {
           <span className="text-lg font-bold tracking-tight">BK BUSINESS</span>
         </div>
         <div className="max-w-md space-y-4">
-          <h2 className="text-4xl font-bold leading-tight">
+          <h1 className="text-4xl font-bold leading-tight">
             Gestão inteligente do seu negócio, do estoque ao balcão.
-          </h2>
+          </h1>
           <p className="text-primary-foreground/85">
             PDV rápido, controlo de matérias-primas, receitas de produção, clientes, dívidas e
             indicadores de lucro — tudo num só lugar.
