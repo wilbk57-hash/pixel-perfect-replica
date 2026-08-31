@@ -118,6 +118,42 @@ function RootShell({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              (function () {
+                var KEY = 'bk-chunk-reload';
+                function isChunkError(msg) {
+                  return typeof msg === 'string' && (
+                    msg.indexOf('Failed to fetch dynamically imported module') !== -1 ||
+                    msg.indexOf('error loading dynamically imported module') !== -1 ||
+                    msg.indexOf('Importing a module script failed') !== -1
+                  );
+                }
+                async function recover() {
+                  if (sessionStorage.getItem(KEY)) return;
+                  sessionStorage.setItem(KEY, '1');
+                  try {
+                    if ('serviceWorker' in navigator) {
+                      var regs = await navigator.serviceWorker.getRegistrations();
+                      await Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    }
+                    if (window.caches) {
+                      var names = await caches.keys();
+                      await Promise.all(names.map(function (n) { return caches.delete(n); }));
+                    }
+                  } catch (e) {}
+                  location.reload();
+                }
+                window.addEventListener('error', function (e) {
+                  if (isChunkError(e && e.message)) recover();
+                });
+                window.addEventListener('unhandledrejection', function (e) {
+                  var r = e && e.reason;
+                  if (isChunkError(r && r.message ? r.message : String(r))) recover();
+                });
+                window.addEventListener('load', function () {
+                  setTimeout(function () { sessionStorage.removeItem(KEY); }, 5000);
+                });
+              })();
+
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', async () => {
                   if (${JSON.stringify(import.meta.env.PROD)}) {
