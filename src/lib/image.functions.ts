@@ -62,9 +62,8 @@ export const generateProductImage = createServerFn({ method: "POST" })
     const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("Serviço de IA indisponível. Tente novamente mais tarde.");
 
-    // Resolve o dono efetivo do negócio (o próprio, ou o dono a quem o
-    // funcionário está associado), para guardar a imagem sempre na mesma
-    // pasta do negócio — independentemente de quem gera a imagem.
+    // Resolve o dono efetivo do negócio, para guardar a imagem sempre na
+    // mesma pasta do negócio — independentemente de quem gera a imagem.
     const { data: ownerId, error: ownerError } = await (supabase.rpc as any)("my_business_id");
     if (ownerError || !ownerId) throw new Error("Não foi possível identificar o negócio.");
 
@@ -106,12 +105,12 @@ export const generateProductImage = createServerFn({ method: "POST" })
       .upload(path, bytes, { contentType: "image/png", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
-    // Bucket privado: servimos a imagem através de um link assinado temporário.
-    const { data: signed, error: signedError } = await supabase.storage
-      .from("product-images")
-      .createSignedUrl(path, 60 * 60 * 24 * 365);
-    if (signedError || !signed?.signedUrl) throw new Error("Não foi possível criar o link da imagem.");
-    const publicUrl = signed.signedUrl;
+    // Bucket agora é público (ver migração 20260901000000): URL fixa,
+    // nunca expira — resolve o problema do link assinado de 1 ano.
+    const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
+    // Adiciona um parâmetro de versão para forçar o browser a não usar
+    // uma imagem antiga em cache quando o produto é regenerado.
+    const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
 
     const { error: updateError } = await supabase
       .from("products")
