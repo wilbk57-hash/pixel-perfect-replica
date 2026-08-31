@@ -69,14 +69,13 @@ export type CustomerUpsertPayload = {
 };
 
 export type QueuedAction =
-  | { localId: string; createdAt: number; kind: "sale"; payload: SalePayload; label: string }
-  | { localId: string; createdAt: number; kind: "pay_debt"; payload: PayDebtPayload; label: string }
-  | { localId: string; createdAt: number; kind: "adjust_stock"; payload: AdjustStockPayload; label: string }
-  | { localId: string; createdAt: number; kind: "produce_recipe"; payload: ProduceRecipePayload; label: string }
-  | { localId: string; createdAt: number; kind: "product_upsert"; payload: ProductUpsertPayload; label: string }
-  | { localId: string; createdAt: number; kind: "category_insert"; payload: CategoryInsertPayload; label: string }
-  | { localId: string; createdAt: number; kind: "customer_upsert"; payload: CustomerUpsertPayload; label: string };
-
+  | { localId: string; createdAt: number; kind: "sale"; payload: SalePayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "pay_debt"; payload: PayDebtPayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "adjust_stock"; payload: AdjustStockPayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "produce_recipe"; payload: ProduceRecipePayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "product_upsert"; payload: ProductUpsertPayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "category_insert"; payload: CategoryInsertPayload; label: string; lastError?: string }
+  | { localId: string; createdAt: number; kind: "customer_upsert"; payload: CustomerUpsertPayload; label: string; lastError?: string };
 const KEY = "bk_offline_queue_v2";
 const LEGACY_KEY = "bk_offline_sales_queue";
 
