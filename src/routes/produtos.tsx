@@ -88,16 +88,15 @@ function ProductsPage() {
   const [packaging, setPackaging] = useState("auto");
   const generateImage = useServerFn(generateProductImage);
 
-  const products = useQuery({
+   const products = useQuery({
     queryKey: ["products", user?.id],
     enabled: !!user && isAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
+      const { data, error } = await supabase.from("products_secure").select("*").order("name");
       if (error) throw error;
       return data;
     },
   });
-
   const categories = useQuery({
     queryKey: ["categories", user?.id],
     enabled: !!user,
