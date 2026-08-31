@@ -155,11 +155,11 @@ function ProductionPage() {
           unit_cost: Number(i.unit_cost) || 0,
         }));
       const { error } = await supabase.rpc("save_recipe", {
-        p_recipe_id: editingId,
+        p_recipe_id: editingId as unknown as string,
         p_name: productName.trim(),
-        p_product_id: productId,
+        p_product_id: productId as unknown as string,
         p_product_name: productName.trim(),
-        p_category_id: categoryId,
+        p_category_id: categoryId as unknown as string,
         p_unit: unit,
         p_sale_price: Number(salePrice) || 0,
         p_yield_quantity: Number(outputQty) || 1,
@@ -403,7 +403,7 @@ function ProductionPage() {
                     <div key={i.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate">{i.product_name}</span>
                       <span>
-                        {qty(Number(i.quantity))} · {money(Number(i.unit_cost ?? 0))}
+                        {qty(Number(i.quantity))} · {money(Number((i as { unit_cost?: number }).unit_cost ?? 0))}
                       </span>
                     </div>
                   ))}
