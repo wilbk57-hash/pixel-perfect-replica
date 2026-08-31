@@ -30,7 +30,7 @@ function SalesPage() {
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("sales")
+        .from("sales_secure")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200);
@@ -43,7 +43,7 @@ function SalesPage() {
     queryKey: ["sale-items", openId],
     enabled: !!openId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("sale_items").select("*").eq("sale_id", openId!);
+     const { data, error } = await supabase.from("sale_items_secure").select("*").eq("sale_id", openId!);
       if (error) throw error;
       return data;
     },
