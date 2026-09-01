@@ -1015,6 +1015,7 @@ export type Database = {
           p_ingredients: Json
           p_name: string
           p_product_id: string
+          p_product_name: string
           p_recipe_id: string
           p_sale_price: number
           p_unit: string
