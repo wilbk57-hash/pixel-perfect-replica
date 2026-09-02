@@ -363,6 +363,30 @@ export type Database = {
           },
         ]
       }
+      offline_action_log: {
+        Row: {
+          action_type: string
+          client_action_id: string
+          created_at: string
+          result_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          client_action_id: string
+          created_at?: string
+          result_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          client_action_id?: string
+          created_at?: string
+          result_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       production_orders: {
         Row: {
           batches: number
@@ -957,6 +981,7 @@ export type Database = {
     Functions: {
       adjust_stock: {
         Args: {
+          p_client_action_id?: string
           p_product_id: string
           p_quantity: number
           p_reason?: string
@@ -967,6 +992,7 @@ export type Database = {
       business_id: { Args: { _user_id: string }; Returns: string }
       create_sale: {
         Args: {
+          p_client_action_id?: string
           p_customer_id?: string
           p_discount?: number
           p_items: Json
@@ -997,6 +1023,7 @@ export type Database = {
       pay_debt: {
         Args: {
           p_amount: number
+          p_client_action_id?: string
           p_debt_id: string
           p_method?: string
           p_notes?: string
