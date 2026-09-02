@@ -13,8 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, PAYMENT_METHODS } from "@/lib/format";
-import { runOrQueue, type SalePayload } from "@/lib/offline-queue";
-
+import { runOrQueue, newClientActionId, type SalePayload } from "@/lib/offline-queue";
 export const Route = createFileRoute("/pdv")({
   head: () => ({
     meta: [
