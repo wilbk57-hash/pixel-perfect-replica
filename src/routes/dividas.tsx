@@ -68,13 +68,14 @@ function DebtsPage() {
 
   const pendingPayments = usePendingQueue("pay_debt");
 
-  const pay = useMutation({
+   const pay = useMutation({
     mutationFn: async () => {
       const payload: PayDebtPayload = {
         p_debt_id: debtId!,
         p_amount: Number(amount) || 0,
         p_method: method,
         p_notes: "",
+        p_client_action_id: newClientActionId(),
       };
       return runOrQueue("pay_debt", payload, "Recebimento", async () => {
         const { error } = await supabase.rpc("pay_debt", payload as any);
