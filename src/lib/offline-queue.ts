@@ -16,6 +16,7 @@ export type SalePayload = {
   p_paid: number;
   p_payment_method: string;
   p_notes: string;
+  p_client_action_id: string;
 };
 
 export type PayDebtPayload = {
@@ -23,6 +24,7 @@ export type PayDebtPayload = {
   p_amount: number;
   p_method: string;
   p_notes: string;
+  p_client_action_id: string;
 };
 
 export type AdjustStockPayload = {
@@ -30,6 +32,7 @@ export type AdjustStockPayload = {
   p_quantity: number;
   p_type: string;
   p_reason: string;
+  p_client_action_id: string;
 };
 
 export type ProduceRecipePayload = {
@@ -76,6 +79,7 @@ export type QueuedAction =
   | { localId: string; createdAt: number; kind: "product_upsert"; payload: ProductUpsertPayload; label: string; lastError?: string }
   | { localId: string; createdAt: number; kind: "category_insert"; payload: CategoryInsertPayload; label: string; lastError?: string }
   | { localId: string; createdAt: number; kind: "customer_upsert"; payload: CustomerUpsertPayload; label: string; lastError?: string };
+
 const KEY = "bk_offline_queue_v2";
 const LEGACY_KEY = "bk_offline_sales_queue";
 
@@ -83,13 +87,13 @@ function migrateLegacy(): QueuedAction[] {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
     if (!raw) return [];
-    const old = JSON.parse(raw) as { localId: string; createdAt: number; args: SalePayload }[];
+    const old = JSON.parse(raw) as { localId: string; createdAt: number; args: Omit<SalePayload, "p_client_action_id"> }[];
     localStorage.removeItem(LEGACY_KEY);
     return old.map((o) => ({
       localId: o.localId,
       createdAt: o.createdAt,
       kind: "sale" as const,
-      payload: o.args,
+      payload: { ...o.args, p_client_action_id: crypto.randomUUID() },
       label: "Venda",
     }));
   } catch {
@@ -129,6 +133,11 @@ export function removeFromQueue(localId: string) {
   saveQueue(getQueue().filter((q) => q.localId !== localId));
 }
 
+/** Grava a última mensagem de erro de um item da fila, para mostrar ao utilizador qual falhou e porquê. */
+export function setLastError(localId: string, message: string) {
+  saveQueue(getQueue().map((q) => (q.localId === localId ? { ...q, lastError: message } : q)));
+}
+
 export function queueCount() {
   return getQueue().length;
 }
@@ -140,6 +149,18 @@ export function isOffline() {
 export function looksLikeOfflineError(e: unknown) {
   const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
   return msg.includes("fetch") || msg.includes("network") || msg.includes("failed to fetch") || isOffline();
+}
+
+/**
+ * Gera um ID de ação estável para dedupe no servidor (p_client_action_id
+ * nas funções create_sale / pay_debt / adjust_stock). Gerar UMA VEZ por
+ * ação e usar o mesmo valor tanto na tentativa imediata como, se falhar,
+ * na cópia que fica na fila — assim, se o servidor já tiver processado
+ * a ação mas a resposta se perder, a sincronização mais tarde não
+ * duplica nada (o servidor devolve o mesmo resultado sem repetir).
+ */
+export function newClientActionId() {
+  return crypto.randomUUID();
 }
 
 export async function runOrQueue<T>(
