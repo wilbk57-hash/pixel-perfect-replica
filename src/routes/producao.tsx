@@ -57,11 +57,11 @@ function ProductionPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [runQty, setRunQty] = useState("1");
 
-  const products = useQuery({
+   const products = useQuery({
     queryKey: ["products", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
+      const { data, error } = await supabase.from("products_secure").select("*").order("name");
       if (error) throw error;
       return data;
     },
@@ -83,7 +83,7 @@ function ProductionPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("recipes")
-        .select("*, recipe_ingredients(*), product:products(id, name, category_id, unit, sale_price, cost_price)")
+        .select("*, recipe_ingredients(*), product:products_secure(id, name, category_id, unit, sale_price, cost_price)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
