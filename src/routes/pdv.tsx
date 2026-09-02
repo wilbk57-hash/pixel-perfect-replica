@@ -128,35 +128,7 @@ function PosPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-      const payload: SalePayload = {
-        p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
-        ...(customerId === "none" ? {} : { p_customer_id: customerId }),
-        p_discount: Number(discount) || 0,
-        p_paid: paidValue,
-        p_payment_method: method,
-        p_notes: "",
-      };
 
-      return runOrQueue("sale", payload, "Venda", async () => {
-        const { error } = await supabase.rpc("create_sale", payload as any);
-        if (error) throw error;
-      });
-    },
-    onSuccess: (res) => {
-      if (res.offline) {
-        toast.message("Sem ligação — venda guardada neste aparelho. Toque em \"Sincronizar\" quando voltar online.");
-      } else {
-        toast.success("Venda registada");
-      }
-      setCart([]);
-      setDiscount("0");
-      setPaid("");
-      setCustomerId("none");
-      qc.invalidateQueries();
-      if (!res.offline) navigate({ to: "/vendas" });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   function add(p: { id: string; name: string; unit: string; sale_price: number; current_stock: number }) {
     setCart((prev) => {
