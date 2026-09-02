@@ -20,8 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { money, qty, shortDate } from "@/lib/format";
-import { runOrQueue, usePendingQueue, type AdjustStockPayload } from "@/lib/offline-queue";
-
+import { runOrQueue, usePendingQueue, newClientActionId, type AdjustStockPayload } from "@/lib/offline-queue";
 export const Route = createFileRoute("/estoque")({
   head: () => ({
     meta: [
@@ -51,7 +50,7 @@ function InventoryPage() {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
-  const products = useQuery({
+    const products = useQuery({
     queryKey: ["products", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -77,7 +76,7 @@ function InventoryPage() {
 
   const pendingMoves = usePendingQueue("adjust_stock");
 
-  const move = useMutation({
+    const move = useMutation({
     mutationFn: async () => {
       const sign = MOVE_TYPES.find((m) => m.value === type)?.sign ?? 1;
       const payload: AdjustStockPayload = {
@@ -85,6 +84,7 @@ function InventoryPage() {
         p_quantity: sign * (Number(amount) || 0),
         p_type: type,
         p_reason: reason,
+        p_client_action_id: newClientActionId(),
       };
       return runOrQueue("adjust_stock", payload, "Movimento de estoque", async () => {
         const { error } = await supabase.rpc("adjust_stock", payload as any);
