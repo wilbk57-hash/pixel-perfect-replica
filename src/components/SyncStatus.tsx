@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { getQueue, removeFromQueue, queueCount, type QueuedAction } from "@/lib/offline-queue";
+import { getQueue, removeFromQueue, setLastError, queueCount, type QueuedAction } from "@/lib/offline-queue";
 
 async function runAction(item: QueuedAction) {
   switch (item.kind) {
@@ -85,21 +85,32 @@ export function SyncStatus() {
     const queue = [...getQueue()].sort((a, b) => a.createdAt - b.createdAt);
     let ok = 0;
     let fail = 0;
+    const failedLabels: string[] = [];
+
+    // Percorre TODA a fila mesmo que um item falhe — um registo com
+    // problema não deve impedir a sincronização dos restantes.
     for (const item of queue) {
       try {
         await runAction(item);
         removeFromQueue(item.localId);
         ok++;
-      } catch {
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Erro desconhecido";
+        setLastError(item.localId, message);
         fail++;
-        break;
+        failedLabels.push(`${item.label}: ${message}`);
       }
     }
+
     setPending(queueCount());
     setSyncing(false);
     if (ok > 0 || fail > 0) qc.invalidateQueries();
     if (ok > 0) toast.success(`${ok} registo(s) sincronizado(s)`);
-    if (fail > 0) toast.error(`${fail} registo(s) não sincronizado(s) — verifique os dados e tente novamente`);
+    if (fail > 0) {
+      toast.error(
+        `${fail} registo(s) não sincronizado(s) — ${failedLabels[0]}${fail > 1 ? ` (+${fail - 1})` : ""}`,
+      );
+    }
     if (ok === 0 && fail === 0 && !opts?.silent) toast.message("Nada por sincronizar");
   }
 
