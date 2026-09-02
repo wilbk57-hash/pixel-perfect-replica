@@ -68,11 +68,65 @@ function PosPage() {
   const paidValue = paid === "" ? (method === "CREDIT" ? 0 : total) : Number(paid) || 0;
   const debt = Math.max(total - paidValue, 0);
 
-  const checkout = useMutation({
+    const checkout = useMutation({
     mutationFn: async () => {
       if (method === "CREDIT" && customerId === "none") {
         throw new Error("Selecione um cliente para registar a venda a crédito.");
       }
+
+      const payload: SalePayload = {
+        p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
+        ...(customerId === "none" ? {} : { p_customer_id: customerId }),
+        p_discount: Number(discount) || 0,
+        p_paid: paidValue,
+        p_payment_method: method,
+        p_notes: "",
+        p_client_action_id: newClientActionId(),
+      };
+
+      const cartSnapshot = cart;
+      const res = await runOrQueue("sale", payload, "Venda", async () => {
+        const { error } = await supabase.rpc("create_sale", payload as any);
+        if (error) throw error;
+      });
+
+      // Se a venda ficou em fila (offline), desconta localmente do cache
+      // de produtos do PDV para o stock mostrado refletir o que já foi
+      // "reservado" nesta sessão — evita vender o mesmo stock duas vezes
+      // antes de sincronizar.
+      if (res.offline) {
+        qc.setQueryData<{ id: string; current_stock: number }[]>(
+          ["pos-products", user?.id],
+          (old) =>
+            old?.map((p) => {
+              const sold = cartSnapshot.find((c) => c.product_id === p.id);
+              return sold ? { ...p, current_stock: p.current_stock - sold.quantity } : p;
+            }) ?? old,
+        );
+      }
+
+      return res;
+    },
+    onSuccess: (res) => {
+      if (res.offline) {
+        toast.message("Sem ligação — venda guardada neste aparelho. Toque em \"Sincronizar\" quando voltar online.");
+      } else {
+        toast.success("Venda registada");
+      }
+      setCart([]);
+      setDiscount("0");
+      setPaid("");
+      setCustomerId("none");
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      if (!res.offline) {
+        qc.invalidateQueries({ queryKey: ["pos-products"] });
+        navigate({ to: "/vendas" });
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
       const payload: SalePayload = {
         p_items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.price })),
