@@ -36,12 +36,77 @@ function NotFoundComponent() {
   );
 }
 
+const CHUNK_RELOAD_KEY = "bk-chunk-reload";
+
+function isChunkLoadError(error: unknown) {
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("Importing a module script failed") ||
+    msg.includes("Loading chunk") ||
+    msg.includes("Loading CSS chunk")
+  );
+}
+
+async function recoverFromStaleBuild() {
+  if (typeof window === "undefined") return false;
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return false;
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+    }
+  } catch {
+    // ignore
+  }
+  window.location.reload();
+  return true;
+}
+
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const stale = isChunkLoadError(error);
   useEffect(() => {
+    // Após uma nova publicação, os ficheiros antigos deixam de existir. O router
+    // apanha este erro antes de chegar ao window, por isso recuperamos aqui.
+    if (stale) {
+      recoverFromStaleBuild().then((reloading) => {
+        if (!reloading) reportLovableError(error, { boundary: "tanstack_root_error_component" });
+      });
+      return;
+    }
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+  }, [error, stale]);
+
+  if (stale) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            A atualizar a aplicação…
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Foi publicada uma nova versão. A página vai recarregar automaticamente.
+          </p>
+          <div className="mt-6">
+            <a
+              href={typeof window !== "undefined" ? window.location.pathname : "/"}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Recarregar agora
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
