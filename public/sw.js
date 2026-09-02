@@ -4,7 +4,7 @@
 // Os dados (Supabase) NUNCA passam por aqui — vão sempre direto à rede,
 // e a lógica de fila offline já existe em src/lib/offline-queue.ts.
 
-const CACHE_NAME = "bk-business-shell-v3";
+const CACHE_NAME = "bk-business-shell-v4";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {
