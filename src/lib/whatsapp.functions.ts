@@ -28,6 +28,29 @@ export const sendDebtReminder = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!debt) throw new Error("Dívida não encontrada");
 
+    // Evita reenviar o mesmo lembrete para a mesma dívida em menos de 12h.
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const { data: recent } = await supabase
+      .from("debt_reminders")
+      .select("id, created_at")
+      .eq("debt_id", debt.id)
+      .eq("status", "SENT")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recent) {
+      const hoursAgo = Math.max(1, Math.round((Date.now() - new Date(recent.created_at).getTime()) / 3600000));
+      return {
+        sent: false,
+        configured: true,
+        waLink: "",
+        message: "",
+        error: `Já foi enviado um lembrete para esta dívida há ${hoursAgo}h. Aguarde 12h antes de reenviar.`,
+      };
+    }
+
+
     const { data: customer } = await supabase
       .from("customers")
       .select("id, name, phone")
