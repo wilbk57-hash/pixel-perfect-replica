@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendDebtReminder } from "@/lib/whatsapp.functions";
 import { money, shortDate, PAYMENT_METHODS } from "@/lib/format";
-import { runOrQueue, usePendingQueue, type PayDebtPayload } from "@/lib/offline-queue";
+import { runOrQueue, usePendingQueue, newClientActionId, type PayDebtPayload } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/dividas")({
   head: () => ({
