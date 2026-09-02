@@ -63,7 +63,7 @@ function ProductionPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from("products_secure").select("*").order("name");
       if (error) throw error;
-      return data;
+      return (data ?? []).filter((p): p is typeof p & { id: string; name: string } => !!p.id && !!p.name);
     },
   });
 
