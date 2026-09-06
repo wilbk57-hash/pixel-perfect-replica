@@ -36,7 +36,7 @@ type SwInfo = {
 function useServiceWorkerInfo() {
   const [supported] = useState(() => typeof navigator !== "undefined" && "serviceWorker" in navigator);
   const [workers, setWorkers] = useState<SwInfo[]>([]);
-  const [caches, setCaches] = useState<string[]>([]);
+  const [cacheNames, setCacheNames] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);
 
   async function refresh() {
@@ -49,7 +49,7 @@ function useServiceWorkerInfo() {
           .map((w) => ({ scriptURL: w.scriptURL, state: w.state, scope: r.scope })),
       ),
     );
-    if (window.caches) setCaches(await caches.keys());
+    if (typeof window !== "undefined" && "caches" in window) setCacheNames(await window.caches.keys());
   }
 
   useEffect(() => {
