@@ -20,7 +20,7 @@ const MAX = 50;
 export function logPwaEvent(type: PwaEvent["type"], details?: string) {
   try {
     const events = getPwaEvents();
-    events.unshift({ at: Date.now(), type, details });
+    events.unshift(details === undefined ? { at: Date.now(), type } : { at: Date.now(), type, details });
     localStorage.setItem(KEY, JSON.stringify(events.slice(0, MAX)));
   } catch {
     // localStorage indisponível — ignora
