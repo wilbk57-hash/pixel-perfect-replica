@@ -68,7 +68,7 @@ function useServiceWorkerInfo() {
     }
   }
 
-  return { supported, workers, caches, refresh, checkUpdate, checking };
+  return { supported, workers, cacheNames, refresh, checkUpdate, checking };
 }
 
 function useOnline() {
@@ -140,12 +140,12 @@ function DiagnosticoPwaPage() {
               </ul>
             )}
             <div>
-              <p className="mb-1 text-muted-foreground">Caches guardadas ({sw.caches.length})</p>
-              {sw.caches.length === 0 ? (
+              <p className="mb-1 text-muted-foreground">Caches guardadas ({sw.cacheNames.length})</p>
+              {sw.cacheNames.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nenhuma.</p>
               ) : (
                 <ul className="space-y-1 font-mono text-xs">
-                  {sw.caches.map((c) => (
+                  {sw.cacheNames.map((c) => (
                     <li key={c}>{c}</li>
                   ))}
                 </ul>
