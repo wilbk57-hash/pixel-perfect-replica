@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/useAuth";
+import { logPwaEvent } from "@/lib/pwa-events";
 
 function NotFoundComponent() {
   return (
@@ -53,6 +54,7 @@ async function recoverFromStaleBuild() {
   if (typeof window === "undefined") return false;
   if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return false;
   sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+  logPwaEvent("stale_build_recovered", window.location.pathname);
   try {
     if ("serviceWorker" in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -221,12 +223,24 @@ function RootShell({ children }: { children: ReactNode }) {
 
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', async () => {
+                  function logEvent(type, details) {
+                    try {
+                      var raw = localStorage.getItem('bk_pwa_events_v1');
+                      var events = raw ? JSON.parse(raw) : [];
+                      events.unshift({ at: Date.now(), type: type, details: details });
+                      localStorage.setItem('bk_pwa_events_v1', JSON.stringify(events.slice(0, 50)));
+                    } catch (e) {}
+                  }
+
                   if (${JSON.stringify(import.meta.env.PROD)}) {
-                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                    navigator.serviceWorker.register('/sw.js')
+                      .then(function (reg) { logEvent('sw_registered', reg.scope); })
+                      .catch(function (err) { logEvent('sw_register_failed', String(err)); });
                     return;
                   }
 
                   const registrations = await navigator.serviceWorker.getRegistrations();
+                  if (registrations.length) logEvent('sw_unregistered_dev', registrations.length + ' registo(s)');
                   await Promise.all(registrations.map((registration) => registration.unregister()));
                   const cacheNames = await caches.keys();
                   await Promise.all(

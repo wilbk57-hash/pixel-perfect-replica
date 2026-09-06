@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistenteRouteImport } from './routes/assistente'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as DiagnosticoPwaRouteImport } from './routes/diagnostico-pwa'
 import { Route as DividasRouteImport } from './routes/dividas'
 import { Route as EstoqueRouteImport } from './routes/estoque'
 import { Route as PdvRouteImport } from './routes/pdv'
@@ -39,6 +40,11 @@ const AuthRoute = AuthRouteImport.update({
 const ClientesRoute = ClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticoPwaRoute = DiagnosticoPwaRouteImport.update({
+  id: '/diagnostico-pwa',
+  path: '/diagnostico-pwa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DividasRoute = DividasRouteImport.update({
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/assistente': typeof AssistenteRoute
   '/auth': typeof AuthRoute
   '/clientes': typeof ClientesRoute
+  '/diagnostico-pwa': typeof DiagnosticoPwaRoute
   '/dividas': typeof DividasRoute
   '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   '/assistente': typeof AssistenteRoute
   '/auth': typeof AuthRoute
   '/clientes': typeof ClientesRoute
+  '/diagnostico-pwa': typeof DiagnosticoPwaRoute
   '/dividas': typeof DividasRoute
   '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
@@ -109,6 +117,7 @@ export interface FileRoutesById {
   '/assistente': typeof AssistenteRoute
   '/auth': typeof AuthRoute
   '/clientes': typeof ClientesRoute
+  '/diagnostico-pwa': typeof DiagnosticoPwaRoute
   '/dividas': typeof DividasRoute
   '/estoque': typeof EstoqueRoute
   '/pdv': typeof PdvRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/auth'
     | '/clientes'
+    | '/diagnostico-pwa'
     | '/dividas'
     | '/estoque'
     | '/pdv'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/auth'
     | '/clientes'
+    | '/diagnostico-pwa'
     | '/dividas'
     | '/estoque'
     | '/pdv'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/auth'
     | '/clientes'
+    | '/diagnostico-pwa'
     | '/dividas'
     | '/estoque'
     | '/pdv'
@@ -164,6 +176,7 @@ export interface RootRouteChildren {
   AssistenteRoute: typeof AssistenteRoute
   AuthRoute: typeof AuthRoute
   ClientesRoute: typeof ClientesRoute
+  DiagnosticoPwaRoute: typeof DiagnosticoPwaRoute
   DividasRoute: typeof DividasRoute
   EstoqueRoute: typeof EstoqueRoute
   PdvRoute: typeof PdvRoute
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/clientes'
       fullPath: '/clientes'
       preLoaderRoute: typeof ClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostico-pwa': {
+      id: '/diagnostico-pwa'
+      path: '/diagnostico-pwa'
+      fullPath: '/diagnostico-pwa'
+      preLoaderRoute: typeof DiagnosticoPwaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dividas': {
@@ -260,6 +280,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistenteRoute: AssistenteRoute,
   AuthRoute: AuthRoute,
   ClientesRoute: ClientesRoute,
+  DiagnosticoPwaRoute: DiagnosticoPwaRoute,
   DividasRoute: DividasRoute,
   EstoqueRoute: EstoqueRoute,
   PdvRoute: PdvRoute,

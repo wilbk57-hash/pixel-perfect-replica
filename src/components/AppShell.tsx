@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   LayoutDashboard,
   ShoppingCart,
   Package,
@@ -45,6 +46,7 @@ const NAV = [
   { to: "/clientes", label: "Clientes", icon: Users, adminOnly: false },
   { to: "/dividas", label: "Dívidas", icon: HandCoins, adminOnly: false },
   { to: "/assistente", label: "Assistente IA", icon: Sparkles, adminOnly: true },
+  { to: "/diagnostico-pwa", label: "Diagnóstico PWA", icon: Activity, adminOnly: true },
 ] as const;
 
 function TeamDialog() {
