@@ -404,6 +404,28 @@ function CustomersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se o cliente já tem compras ou dívidas, será arquivado para manter o histórico. Caso contrário é
+              apagado definitivamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteCustomer.mutate(deleteTarget.id)}
+              disabled={deleteCustomer.isPending}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+
   );
 }
