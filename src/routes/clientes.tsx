@@ -64,6 +64,7 @@ function CustomersPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [search, setSearch] = useState("");
   const [historyFor, setHistoryFor] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const customers = useQuery({
     queryKey: ["customers-full", user?.id],
