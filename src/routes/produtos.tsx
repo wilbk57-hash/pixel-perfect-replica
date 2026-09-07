@@ -593,6 +593,28 @@ function ProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se o produto já foi vendido ou usado numa receita, será apenas desativado para manter o
+              histórico. Caso contrário é apagado definitivamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteProduct.mutate(deleteTarget.id)}
+              disabled={deleteProduct.isPending}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+
   );
 }
