@@ -295,6 +295,11 @@ function CustomersPage() {
                         Por sincronizar
                       </Badge>
                     )}
+                    {duplicateKeys.has(normalize(c.name)) && (
+                      <Badge variant="destructive" className="shrink-0 gap-1 text-[10px]">
+                        <CopyX className="size-3" /> Duplicado
+                      </Badge>
+                    )}
                   </div>
                   {c.phone ? (
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -328,6 +333,15 @@ function CustomersPage() {
                     }}
                   >
                     <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    disabled={c._pending}
+                    onClick={() => setDeleteTarget({ id: c.id, name: c.name })}
+                  >
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               </div>
