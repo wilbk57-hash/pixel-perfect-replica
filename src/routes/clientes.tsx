@@ -175,9 +175,32 @@ function CustomersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const list = mergedCustomers.filter((c) =>
-    `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()),
-  );
+  const deleteCustomer = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) {
+        const { error: e2 } = await supabase.from("customers").update({ is_active: false }).eq("id", id);
+        if (e2) throw e2;
+        return "DEACTIVATED" as const;
+      }
+      return "DELETED" as const;
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res === "DEACTIVATED"
+          ? "Cliente tem histórico — foi arquivado em vez de apagado."
+          : "Cliente eliminado",
+      );
+      setDeleteTarget(null);
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const list = mergedCustomers
+    .filter((c) => c.is_active !== false)
+    .filter((c) => `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()));
+
 
   const histTotals = (history.data ?? []).reduce(
     (a, s) => ({ paid: a.paid + Number(s.paid_amount), owed: a.owed + Number(s.remaining_debt) }),
