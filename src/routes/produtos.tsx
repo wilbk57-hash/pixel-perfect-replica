@@ -245,8 +245,27 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const deleteProduct = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("delete_product", { p_product_id: id });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res === "DEACTIVATED"
+          ? "Produto tem histórico de vendas — foi desativado em vez de apagado."
+          : "Produto eliminado",
+      );
+      setDeleteTarget(null);
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const filtered = mergedProducts.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
+
 
   return (
     <AppShell
