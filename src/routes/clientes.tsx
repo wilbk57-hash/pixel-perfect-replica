@@ -114,8 +114,32 @@ function CustomersPage() {
     return [...Array.from(byId.values()), ...extra];
   }, [customers.data, pendingCustomers]);
 
+  const normalize = (s: string) =>
+    (s ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  const digits = (s: string) => (s ?? "").replace(/\D/g, "");
+
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of mergedCustomers) {
+      const k = normalize(c.name);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  }, [mergedCustomers]);
+
   const save = useMutation({
     mutationFn: async (d: Draft) => {
+      const clash = mergedCustomers.find(
+        (c) =>
+          c.id !== d.id &&
+          (normalize(c.name) === normalize(d.name) ||
+            (digits(d.phone).length >= 6 && digits(c.phone) === digits(d.phone))),
+      );
+      if (clash) {
+        throw new Error(
+          `Já existe o cliente "${clash.name}"${clash.phone ? ` (${clash.phone})` : ""}. Use outro nome/telefone ou edite o existente.`,
+        );
+      }
       const payload: CustomerUpsertPayload = {
         id: d.id,
         user_id: user!.id,
