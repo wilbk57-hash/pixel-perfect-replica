@@ -426,6 +426,13 @@ function ProductsPage() {
         className="mb-4 max-w-sm"
       />
 
+      {duplicateNames.size > 0 && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          Há {duplicateNames.size} nome(s) de produto repetido(s). Use o botão de eliminar no cartão repetido
+          para ficar só com um.
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
           <Card key={p.id} className="overflow-hidden">
