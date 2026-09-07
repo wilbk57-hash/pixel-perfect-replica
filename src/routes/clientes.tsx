@@ -275,6 +275,13 @@ function CustomersPage() {
         className="mb-4 max-w-sm"
       />
 
+      {duplicateKeys.size > 0 && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          Há {duplicateKeys.size} nome(s) de cliente repetido(s). Use o botão de eliminar no cartão repetido
+          para ficar só com um.
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {list.map((c) => (
           <Card key={c.id}>
