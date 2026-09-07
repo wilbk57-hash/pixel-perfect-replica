@@ -466,29 +466,47 @@ function ProductsPage() {
               </Button>
             </div>
             <CardContent className="pt-4">
-              <div className="flex items-start justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setDraft({
-                      id: p.id,
-                      name: p.name,
-                      category_id: p.category_id,
-                      description: p.description,
-                      unit: p.unit,
-                      product_type: p.product_type,
-                      sale_price: String(p.sale_price),
-                      cost_price: String(p.cost_price),
-                      current_stock: String(p.current_stock),
-                      min_stock: String(p.min_stock),
-                      sku: p.sku,
-                    });
-                    setOpen(true);
-                  }}
-                >
-                  <Pencil className="size-4" />
-                </Button>
+              <div className="flex items-start justify-between gap-2">
+                {duplicateNames.has(normalize(p.name ?? "")) ? (
+                  <Badge variant="destructive" className="gap-1 text-[10px]">
+                    <CopyX className="size-3" /> Nome duplicado
+                  </Badge>
+                ) : (
+                  <span />
+                )}
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setDraft({
+                        id: p.id,
+                        name: p.name,
+                        category_id: p.category_id,
+                        description: p.description,
+                        unit: p.unit,
+                        product_type: p.product_type,
+                        sale_price: String(p.sale_price),
+                        cost_price: String(p.cost_price),
+                        current_stock: String(p.current_stock),
+                        min_stock: String(p.min_stock),
+                        sku: p.sku,
+                      });
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    disabled={p._pending}
+                    onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
               <div className="mt-2 flex items-end justify-between">
                 <div>
