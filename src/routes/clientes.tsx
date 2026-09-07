@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Phone, History } from "lucide-react";
+import { Plus, Pencil, Phone, History, Trash2, CopyX } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +20,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { money, shortDate } from "@/lib/format";
 import { runOrQueue, usePendingQueue, type CustomerUpsertPayload } from "@/lib/offline-queue";
 
@@ -54,6 +64,7 @@ function CustomersPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [search, setSearch] = useState("");
   const [historyFor, setHistoryFor] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const customers = useQuery({
     queryKey: ["customers-full", user?.id],
@@ -104,8 +115,32 @@ function CustomersPage() {
     return [...Array.from(byId.values()), ...extra];
   }, [customers.data, pendingCustomers]);
 
+  const normalize = (s: string) =>
+    (s ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  const digits = (s: string) => (s ?? "").replace(/\D/g, "");
+
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of mergedCustomers) {
+      const k = normalize(c.name);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  }, [mergedCustomers]);
+
   const save = useMutation({
     mutationFn: async (d: Draft) => {
+      const clash = mergedCustomers.find(
+        (c) =>
+          c.id !== d.id &&
+          (normalize(c.name) === normalize(d.name) ||
+            (digits(d.phone).length >= 6 && digits(c.phone) === digits(d.phone))),
+      );
+      if (clash) {
+        throw new Error(
+          `Já existe o cliente "${clash.name}"${clash.phone ? ` (${clash.phone})` : ""}. Use outro nome/telefone ou edite o existente.`,
+        );
+      }
       const payload: CustomerUpsertPayload = {
         id: d.id,
         user_id: user!.id,
@@ -141,9 +176,32 @@ function CustomersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const list = mergedCustomers.filter((c) =>
-    `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()),
-  );
+  const deleteCustomer = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) {
+        const { error: e2 } = await supabase.from("customers").update({ is_active: false }).eq("id", id);
+        if (e2) throw e2;
+        return "DEACTIVATED" as const;
+      }
+      return "DELETED" as const;
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res === "DEACTIVATED"
+          ? "Cliente tem histórico — foi arquivado em vez de apagado."
+          : "Cliente eliminado",
+      );
+      setDeleteTarget(null);
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const list = mergedCustomers
+    .filter((c) => c.is_active !== false)
+    .filter((c) => `${c.name} ${c.phone}`.toLowerCase().includes(search.toLowerCase()));
+
 
   const histTotals = (history.data ?? []).reduce(
     (a, s) => ({ paid: a.paid + Number(s.paid_amount), owed: a.owed + Number(s.remaining_debt) }),
@@ -217,6 +275,13 @@ function CustomersPage() {
         className="mb-4 max-w-sm"
       />
 
+      {duplicateKeys.size > 0 && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          Há {duplicateKeys.size} nome(s) de cliente repetido(s). Use o botão de eliminar no cartão repetido
+          para ficar só com um.
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {list.map((c) => (
           <Card key={c.id}>
@@ -228,6 +293,11 @@ function CustomersPage() {
                     {c._pending && (
                       <Badge variant="outline" className="shrink-0 text-[10px]">
                         Por sincronizar
+                      </Badge>
+                    )}
+                    {duplicateKeys.has(normalize(c.name)) && (
+                      <Badge variant="destructive" className="shrink-0 gap-1 text-[10px]">
+                        <CopyX className="size-3" /> Duplicado
                       </Badge>
                     )}
                   </div>
@@ -263,6 +333,15 @@ function CustomersPage() {
                     }}
                   >
                     <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    disabled={c._pending}
+                    onClick={() => setDeleteTarget({ id: c.id, name: c.name })}
+                  >
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               </div>
@@ -325,6 +404,28 @@ function CustomersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se o cliente já tem compras ou dívidas, será arquivado para manter o histórico. Caso contrário é
+              apagado definitivamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteCustomer.mutate(deleteTarget.id)}
+              disabled={deleteCustomer.isPending}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+
   );
 }

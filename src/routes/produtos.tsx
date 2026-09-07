@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Tag, Sparkles, ImageOff } from "lucide-react";
+import { Plus, Pencil, Tag, Sparkles, ImageOff, Trash2, CopyX } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { money, qty, UNITS, PRODUCT_TYPES } from "@/lib/format";
 import {
   runOrQueue,
@@ -83,6 +93,7 @@ function ProductsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [catName, setCatName] = useState("");
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [imageTarget, setImageTarget] = useState<{ id: string; name: string; description: string } | null>(null);
   const [customInstructions, setCustomInstructions] = useState("");
   const [packaging, setPackaging] = useState("auto");
@@ -130,8 +141,23 @@ function ProductsPage() {
     return [...Array.from(byId.values()), ...extra];
   }, [products.data, pendingProducts]);
 
+  const normalize = (s: string) =>
+    s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of mergedProducts) counts.set(normalize(p.name ?? ""), (counts.get(normalize(p.name ?? "")) ?? 0) + 1);
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  }, [mergedProducts]);
+
   const saveProduct = useMutation({
     mutationFn: async (d: Draft) => {
+      const clash = mergedProducts.find(
+        (p) => p.id !== d.id && normalize(p.name ?? "") === normalize(d.name),
+      );
+      if (clash) {
+        throw new Error(`Já existe um produto chamado "${clash.name}". Use outro nome ou edite o existente.`);
+      }
       const payload: ProductUpsertPayload = {
         id: d.id,
         user_id: user!.id,
@@ -220,8 +246,27 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const deleteProduct = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("delete_product", { p_product_id: id });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res === "DEACTIVATED"
+          ? "Produto tem histórico de vendas — foi desativado em vez de apagado."
+          : "Produto eliminado",
+      );
+      setDeleteTarget(null);
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const filtered = mergedProducts.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const catName_ = (id: string | null) => categories.data?.find((c) => c.id === id)?.name ?? "Sem categoria";
+
 
   return (
     <AppShell
@@ -381,6 +426,13 @@ function ProductsPage() {
         className="mb-4 max-w-sm"
       />
 
+      {duplicateNames.size > 0 && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          Há {duplicateNames.size} nome(s) de produto repetido(s). Use o botão de eliminar no cartão repetido
+          para ficar só com um.
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
           <Card key={p.id} className="overflow-hidden">
@@ -421,29 +473,47 @@ function ProductsPage() {
               </Button>
             </div>
             <CardContent className="pt-4">
-              <div className="flex items-start justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setDraft({
-                      id: p.id,
-                      name: p.name,
-                      category_id: p.category_id,
-                      description: p.description,
-                      unit: p.unit,
-                      product_type: p.product_type,
-                      sale_price: String(p.sale_price),
-                      cost_price: String(p.cost_price),
-                      current_stock: String(p.current_stock),
-                      min_stock: String(p.min_stock),
-                      sku: p.sku,
-                    });
-                    setOpen(true);
-                  }}
-                >
-                  <Pencil className="size-4" />
-                </Button>
+              <div className="flex items-start justify-between gap-2">
+                {duplicateNames.has(normalize(p.name ?? "")) ? (
+                  <Badge variant="destructive" className="gap-1 text-[10px]">
+                    <CopyX className="size-3" /> Nome duplicado
+                  </Badge>
+                ) : (
+                  <span />
+                )}
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setDraft({
+                        id: p.id,
+                        name: p.name,
+                        category_id: p.category_id,
+                        description: p.description,
+                        unit: p.unit,
+                        product_type: p.product_type,
+                        sale_price: String(p.sale_price),
+                        cost_price: String(p.cost_price),
+                        current_stock: String(p.current_stock),
+                        min_stock: String(p.min_stock),
+                        sku: p.sku,
+                      });
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    disabled={p._pending}
+                    onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
               <div className="mt-2 flex items-end justify-between">
                 <div>
@@ -523,6 +593,28 @@ function ProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se o produto já foi vendido ou usado numa receita, será apenas desativado para manter o
+              histórico. Caso contrário é apagado definitivamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteProduct.mutate(deleteTarget.id)}
+              disabled={deleteProduct.isPending}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+
   );
 }
