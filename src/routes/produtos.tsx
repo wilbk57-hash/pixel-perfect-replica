@@ -93,6 +93,7 @@ function ProductsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [catName, setCatName] = useState("");
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [imageTarget, setImageTarget] = useState<{ id: string; name: string; description: string } | null>(null);
   const [customInstructions, setCustomInstructions] = useState("");
   const [packaging, setPackaging] = useState("auto");
