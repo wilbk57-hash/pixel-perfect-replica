@@ -140,8 +140,23 @@ function ProductsPage() {
     return [...Array.from(byId.values()), ...extra];
   }, [products.data, pendingProducts]);
 
+  const normalize = (s: string) =>
+    s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of mergedProducts) counts.set(normalize(p.name ?? ""), (counts.get(normalize(p.name ?? "")) ?? 0) + 1);
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  }, [mergedProducts]);
+
   const saveProduct = useMutation({
     mutationFn: async (d: Draft) => {
+      const clash = mergedProducts.find(
+        (p) => p.id !== d.id && normalize(p.name ?? "") === normalize(d.name),
+      );
+      if (clash) {
+        throw new Error(`Já existe um produto chamado "${clash.name}". Use outro nome ou edite o existente.`);
+      }
       const payload: ProductUpsertPayload = {
         id: d.id,
         user_id: user!.id,
