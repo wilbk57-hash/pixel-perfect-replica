@@ -289,6 +289,51 @@ function DebtsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registar dívida</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              <Select value={newCustomer} onValueChange={setNewCustomer}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(customers.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor em dívida</Label>
+              <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Data limite (opcional)</Label>
+              <Input type="date" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas (opcional)</Label>
+              <Input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => createDebt.mutate()}
+              disabled={!newCustomer || !newAmount || createDebt.isPending}
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
