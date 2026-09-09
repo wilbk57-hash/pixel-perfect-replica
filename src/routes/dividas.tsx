@@ -38,6 +38,47 @@ function DebtsPage() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("CASH");
   const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newDue, setNewDue] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+
+  const customers = useQuery({
+    queryKey: ["customers-debt", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const createDebt = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("create_debt", {
+        p_customer_id: newCustomer,
+        p_amount: Number(newAmount) || 0,
+        p_due_date: newDue || null,
+        p_notes: newNotes,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Dívida registada");
+      setNewOpen(false);
+      setNewCustomer("");
+      setNewAmount("");
+      setNewDue("");
+      setNewNotes("");
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const debts = useQuery({
     queryKey: ["debts", user?.id],
