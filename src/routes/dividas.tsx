@@ -38,6 +38,47 @@ function DebtsPage() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("CASH");
   const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newDue, setNewDue] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+
+  const customers = useQuery({
+    queryKey: ["customers-debt", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const createDebt = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("create_debt", {
+        p_customer_id: newCustomer,
+        p_amount: Number(newAmount) || 0,
+        p_due_date: newDue || null,
+        p_notes: newNotes,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Dívida registada");
+      setNewOpen(false);
+      setNewCustomer("");
+      setNewAmount("");
+      setNewDue("");
+      setNewNotes("");
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const debts = useQuery({
     queryKey: ["debts", user?.id],
@@ -123,6 +164,9 @@ function DebtsPage() {
 
   return (
     <AppShell title="Dívidas" subtitle={`${open.length} em aberto · ${money(totalOpen)} por receber`}>
+      <div className="mb-4 flex justify-end">
+        <Button onClick={() => setNewOpen(true)}>Registar dívida</Button>
+      </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {(debts.data ?? []).map((d) => {
@@ -241,6 +285,51 @@ function DebtsPage() {
           <DialogFooter>
             <Button onClick={() => pay.mutate()} disabled={!amount || pay.isPending}>
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registar dívida</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              <Select value={newCustomer} onValueChange={setNewCustomer}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(customers.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor em dívida</Label>
+              <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Data limite (opcional)</Label>
+              <Input type="date" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas (opcional)</Label>
+              <Input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => createDebt.mutate()}
+              disabled={!newCustomer || !newAmount || createDebt.isPending}
+            >
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

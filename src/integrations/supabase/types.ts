@@ -990,6 +990,16 @@ export type Database = {
         Returns: undefined
       }
       business_id: { Args: { _user_id: string }; Returns: string }
+      create_debt: {
+        Args: {
+          p_amount: number
+          p_client_action_id?: string
+          p_customer_id: string
+          p_due_date?: string
+          p_notes?: string
+        }
+        Returns: string
+      }
       create_sale: {
         Args: {
           p_client_action_id?: string
