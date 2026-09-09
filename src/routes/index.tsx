@@ -50,7 +50,7 @@ function Dashboard() {
     queryFn: async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const [sales, products, debts, recent] = await Promise.all([
+      const [sales, products, debts, recent, payments] = await Promise.all([
         supabase.from("sales_secure").select("final_total, gross_profit, created_at").eq("status", "COMPLETED"),
         supabase.from("products_secure").select("id, name, current_stock, min_stock, unit, cost_price").eq("status", "ACTIVE"),
         supabase.from("customer_debts").select("remaining_amount").neq("status", "PAID"),
@@ -59,6 +59,10 @@ function Dashboard() {
           .select("id, sale_number, customer_name, final_total, payment_status, created_at")
           .order("created_at", { ascending: false })
           .limit(6),
+        supabase
+          .from("customer_payments")
+          .select("amount, created_at")
+          .gte("created_at", today.toISOString()),
       ]);
 
       const all = sales.data ?? [];
