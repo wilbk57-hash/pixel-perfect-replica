@@ -164,6 +164,9 @@ function DebtsPage() {
 
   return (
     <AppShell title="Dívidas" subtitle={`${open.length} em aberto · ${money(totalOpen)} por receber`}>
+      <div className="mb-4 flex justify-end">
+        <Button onClick={() => setNewOpen(true)}>Registar dívida</Button>
+      </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {(debts.data ?? []).map((d) => {
