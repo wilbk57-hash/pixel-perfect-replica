@@ -110,6 +110,12 @@ function Dashboard() {
       ? [{ label: "Lucro bruto hoje", value: money(data?.todayProfit), icon: TrendingUp, hint: "margem do dia" }]
       : []),
     { label: "Vendas do mês", value: money(data?.monthTotal), icon: TrendingUp, hint: "acumulado" },
+    {
+      label: "Dívidas pagas hoje",
+      value: money(data?.todayPayments),
+      icon: HandCoins,
+      hint: "dinheiro recebido",
+    },
     { label: "Dívidas por receber", value: money(data?.debtTotal), icon: HandCoins, hint: "clientes a crédito" },
   ];
 
