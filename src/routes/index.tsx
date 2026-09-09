@@ -95,6 +95,7 @@ function Dashboard() {
           .filter((s) => new Date(s.created_at ?? 0).getMonth() === today.getMonth())
           .reduce((a, s) => a + Number(s.final_total), 0),
         debtTotal: (debts.data ?? []).reduce((a, d) => a + Number(d.remaining_amount), 0),
+        todayPayments: (payments.data ?? []).reduce((a, p) => a + Number(p.amount), 0),
         stockValue: list.reduce((a, p) => a + Number(p.current_stock) * Number(p.cost_price ?? 0), 0),
         lowStock: list.filter((p) => Number(p.current_stock) <= Number(p.min_stock)),
         recent: recent.data ?? [],
