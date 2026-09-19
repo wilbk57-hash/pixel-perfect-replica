@@ -1,95 +1,121 @@
-// Service worker do BK BUSINESS — permite abrir a app sem internet.
-// Estratégia: "network first, cache fallback" para navegação (HTML) e
-// "cache first" para os ficheiros estáticos (JS/CSS/ícones).
-// Os dados (Supabase) NUNCA passam por aqui — vão sempre direto à rede,
-// e a lógica de fila offline já existe em src/lib/offline-queue.ts.
+const CACHE_NAME = 'bk-cirurgia-v5';
+// Assets estáticos versionados: nunca mudam sem trocar o nome do arquivo,
+// então podem ser cache-first com segurança.
+const ASSETS_TO_CACHE = [
+  './app.html',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-512-maskable.png'
+];
 
-const CACHE_NAME = "bk-business-shell-v4";
-const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png", "/favicon.ico"];
-
-self.addEventListener("install", (event) => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch(() => {}),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE).catch(() => {}))
   );
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
-    ),
+      Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      )
+    )
   );
   self.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  if (request.method !== "GET") return;
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-
-  // Nunca cachear chamadas a APIs externas (Supabase, gateway de IA, WhatsApp, etc.)
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/api")) return;
 
-  // O preview do Vite serve módulos React/TanStack com URLs transitórias.
-  // Guardá-los pode misturar versões depois de uma atualização e quebrar os hooks.
-  if (
-    url.pathname.startsWith("/node_modules/") ||
-    url.pathname.startsWith("/src/") ||
-    url.pathname.startsWith("/@") ||
-    url.searchParams.has("v") ||
-    url.searchParams.has("t")
-  ) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  // Nunca cachear chamadas de API — dados têm que ser sempre ao vivo.
+  if (url.pathname.startsWith('/api/')) return;
 
-  // Navegação de páginas: tenta rede primeiro, cai para cache (shell) se offline.
-  if (request.mode === "navigate") {
+  const isStatic =
+    url.pathname.endsWith('/manifest.json') || url.pathname.includes('/icons/');
+
+  if (isStatic) {
+    // Ícones e manifest: cache-first (só mudam quando trocamos o nome do arquivo).
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return res;
-        })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
-    );
-    return;
-  }
-
-  // Bundles do build (/assets/*): rede primeiro. Cada publicação gera nomes novos,
-  // por isso servir de cache pode apontar para ficheiros que já não existem.
-  if (url.pathname.startsWith("/assets/")) {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           }
-          return res;
-        })
-        .catch(() => caches.match(request)),
+          return response;
+        });
+      })
     );
     return;
   }
 
-  // Restantes ficheiros estáticos (ícones, imagens): cache first, atualiza em segundo plano.
+  // App shell (app.html), a rota /app e qualquer HTML/JS/CSS do mesmo site:
+  // network-first (pega sempre a versão mais nova quando há internet), mas
+  // se a rede falhar (offline), cai para a última cópia guardada em vez de
+  // mostrar uma tela quebrada. É isto que faz o app instalado funcionar
+  // sem internet.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(request).then((cached) => cached || caches.match('./app.html'))
+      )
+  );
+});
+
+// ── Web Push: lembretes de eventos de estudo ──
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = payload.title || 'BK-CIRURGIA';
+  const options = {
+    body: payload.body || '',
+    icon: payload.icon || './icons/icon-192.png',
+    badge: payload.badge || './icons/icon-192.png',
+    tag: payload.tag || 'bk-reminder',
+    renotify: true,
+    requireInteraction: false,
+    data: { url: payload.url || './app.html' }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(
+    (event.notification.data && event.notification.data.url) || './app.html',
+    self.location.origin
+  ).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.navigate?.(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
   );
 });
